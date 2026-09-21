@@ -1,0 +1,13 @@
+power_sensors:
+  washing_machine:
+    entity_id: sensor.washing_machine_power
+    channel_type: consumer
+    min_power_w: 0
+    max_power_w: 2500
+    max_age_seconds: 30
+
+estimated_consumers:
+  tv:
+    entity_id: switch.tv
+    estimated_power_w: 85
+    max_age_seconds: 60

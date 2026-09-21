@@ -1,6 +1,9 @@
 from unittest.mock import Mock, patch
 
+import pytest
+
 from energy_manager.adapters.home_assistant import HomeAssistantAdapter
+from energy_manager.exceptions import InvalidMeasurementError, MeasurementUnavailableError
 
 
 def test_check_connection_returns_true():
@@ -28,3 +31,33 @@ def test_check_connection_returns_true():
         },
         timeout=5,
     )
+
+def test_get_power_measurement_raises_when_unavailable():
+    adapter = HomeAssistantAdapter(
+        base_url="http://example.local:8123",
+        token="test-token",
+    )
+
+    state = {
+        "state": "unavailable",
+        "last_reported": "2026-09-18T10:38:59+00:00",
+    }
+
+    with patch.object(adapter, "_get_raw_state", return_value=state):
+        with pytest.raises(MeasurementUnavailableError):
+            adapter.get_power_measurement("sensor.test_power")
+
+def test_get_power_measurement_raises_for_invalid_value():
+    adapter = HomeAssistantAdapter(
+        base_url="http://example.local:8123",
+        token="test-token",
+    )
+
+    state = {
+        "state": "abc",
+        "last_reported": "2026-09-18T10:38:59+00:00",
+    }
+
+    with patch.object(adapter, "_get_raw_state", return_value=state):
+        with pytest.raises(InvalidMeasurementError):
+            adapter.get_power_measurement("sensor.test_power")

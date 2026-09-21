@@ -6,7 +6,7 @@ from energy_manager.exceptions import (
     InvalidMeasurementError,
     MeasurementUnavailableError,
 )
-from energy_manager.models import PowerMeasurement
+from energy_manager.models import EntityState, PowerMeasurement
 
 
 class HomeAssistantAdapter:
@@ -28,7 +28,7 @@ class HomeAssistantAdapter:
 
         return response.json().get("message") == "API running."
 
-    def get_state(self, entity_id: str) -> dict:
+    def _get_raw_state(self, entity_id: str) -> dict:
         response = requests.get(
             f"{self._base_url}/api/states/{entity_id}",
             headers=self._headers,
@@ -38,7 +38,7 @@ class HomeAssistantAdapter:
         return response.json()
 
     def get_power_measurement(self, entity_id: str) -> PowerMeasurement:
-        state = self.get_state(entity_id)
+        state = self._get_raw_state(entity_id)
 
         raw_power = state["state"]
 
@@ -60,6 +60,19 @@ class HomeAssistantAdapter:
         return PowerMeasurement(
             source=entity_id,
             power_w=power_w,
+            reported_at=reported_at,
+            received_at=received_at,
+        )
+
+    def get_entity_state(self, entity_id: str) -> EntityState:
+        state = self.get_state(entity_id)
+
+        reported_at = datetime.fromisoformat(state["last_reported"])
+        received_at = datetime.now(UTC)
+
+        return EntityState(
+            source=entity_id,
+            state=state["state"],
             reported_at=reported_at,
             received_at=received_at,
         )
