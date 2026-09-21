@@ -11,3 +11,7 @@ estimated_consumers:
     entity_id: switch.tv
     estimated_power_w: 85
     max_age_seconds: 60
+
+constant_consumers:
+  fridge:
+    estimated_power_w: 50

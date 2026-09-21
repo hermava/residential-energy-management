@@ -5,7 +5,11 @@ import pytest
 from energy_manager.models import (
     EntityState,
     EstimatedConsumerConfig,
+    LoadEstimate,
     PowerChannelType,
+    PowerContribution,
+    PowerContributionStatus,
+    PowerContributionType,
     PowerMeasurement,
     PowerSensorConfig,
 )
@@ -184,3 +188,63 @@ def test_entity_state_rejects_empty_state():
             reported_at=timestamp,
             received_at=timestamp,
         )
+
+def test_power_contribution_creation() -> None:
+    contribution = PowerContribution(
+        name="washing_machine",
+        source="sensor.washing_machine_power",
+        power_w=180.0,
+        contribution_type=PowerContributionType.MEASURED,
+    )
+
+    assert contribution.name == "washing_machine"
+    assert contribution.source == "sensor.washing_machine_power"
+    assert contribution.power_w == 180.0
+    assert contribution.status is PowerContributionStatus.VALID
+
+def test_power_contribution_rejects_negative_power() -> None:
+    with pytest.raises(ValueError, match="power_w must not be negative"): 
+        PowerContribution(
+            name="washing_machine",
+            source="sensor.washing_machine_power",
+            power_w=-1.0,
+            contribution_type=PowerContributionType.MEASURED,
+        ) 
+
+def test_power_contribution_allows_missing_source() -> None:
+    contribution = PowerContribution(
+        name="fridge",
+        power_w=40.0,
+        contribution_type=PowerContributionType.CONSTANT_ESTIMATED,
+    )
+
+    assert contribution.source is None   
+
+def test_power_contribution_can_represent_stale_value() -> None:
+    contribution = PowerContribution(
+        name="washing_machine",
+        power_w=0.0,
+        contribution_type=PowerContributionType.MEASURED,
+        source="sensor.washing_machine_power",
+        status=PowerContributionStatus.STALE,
+    )
+
+    assert contribution.power_w == 0.0
+    assert contribution.status is PowerContributionStatus.STALE
+
+
+def test_load_estimate_keeps_contributions() -> None:
+    contribution = PowerContribution(
+        name="tv",
+        source="sensor.tv",
+        power_w=85.0,
+        contribution_type=PowerContributionType.STATE_ESTIMATED,
+    )
+
+    estimate = LoadEstimate(
+        total_power_w=85.0,
+        contributions=(contribution,),
+    )
+
+    assert estimate.total_power_w == 85.0
+    assert estimate.contributions == (contribution,)

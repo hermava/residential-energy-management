@@ -47,6 +47,18 @@ class PowerSensorConfig:
             raise ValueError("max_age_seconds must be greater than zero")
 
 @dataclass(frozen=True)
+class ConstantConsumerConfig:
+    name: str
+    estimated_power_w: float
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("name must not be empty")
+
+        if self.estimated_power_w < 0:
+            raise ValueError("estimated_power_w must not be negative")
+
+@dataclass(frozen=True)
 class EstimatedConsumerConfig:
     name: str
     entity_id: str
@@ -79,4 +91,42 @@ class EntityState:
 
         if not self.state.strip():
             raise ValueError("state must not be empty")
+
+
+class PowerContributionType(Enum):
+    MEASURED = "measured"
+    STATE_ESTIMATED = "state_estimated"
+    CONSTANT_ESTIMATED = "constant_estimated"
+
+class PowerContributionStatus(Enum):
+    VALID = "valid"
+    STALE = "stale"
+    IMPLAUSIBLE = "implausible"
+    UNAVAILABLE = "unavailable"
+
+@dataclass(frozen=True)
+class PowerContribution:
+    name: str
+    power_w: float
+    contribution_type: PowerContributionType
+    source: str | None = None
+    status: PowerContributionStatus = PowerContributionStatus.VALID
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("name must not be empty")
+
+        if self.power_w < 0:
+            raise ValueError("power_w must not be negative")
+
+@dataclass(frozen=True)
+class LoadInputConfig:
+    power_sensors: dict[str, PowerSensorConfig]
+    estimated_consumers: dict[str, EstimatedConsumerConfig]
+    constant_consumers: dict[str, ConstantConsumerConfig]
+
+@dataclass(frozen=True)
+class LoadEstimate:
+    total_power_w: float
+    contributions: tuple[PowerContribution, ...]
 
