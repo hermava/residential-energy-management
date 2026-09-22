@@ -120,10 +120,19 @@ class PowerContribution:
             raise ValueError("power_w must not be negative")
 
 @dataclass(frozen=True)
-class LoadInputConfig:
+class OutputConfig:
+    entity_id: str
+
+    def __post_init__(self) -> None:
+        if not self.entity_id:
+            raise ValueError("entity_id must not be empty")
+
+@dataclass(frozen=True)
+class LoadConfig:
     power_sensors: dict[str, PowerSensorConfig]
     estimated_consumers: dict[str, EstimatedConsumerConfig]
     constant_consumers: dict[str, ConstantConsumerConfig]
+    outputs: dict[str, OutputConfig]
 
 @dataclass(frozen=True)
 class LoadEstimate:

@@ -4,3 +4,6 @@ class MeasurementUnavailableError(Exception):
 
 class InvalidMeasurementError(Exception):
     pass
+
+class EntityUnavailableError(Exception):
+    pass

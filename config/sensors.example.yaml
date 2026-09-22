@@ -15,3 +15,7 @@ estimated_consumers:
 constant_consumers:
   fridge:
     estimated_power_w: 50
+
+outputs:
+  estimated_total_load:
+    entity_id: sensor.residential_estimated_total_load

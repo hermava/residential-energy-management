@@ -5,20 +5,22 @@ import yaml
 from energy_manager.models import (
     ConstantConsumerConfig,
     EstimatedConsumerConfig,
-    LoadInputConfig,
+    LoadConfig,
+    OutputConfig,
     PowerChannelType,
     PowerSensorConfig,
 )
 
 
-def load_input_config(path: Path) -> LoadInputConfig:
+def load_config(path: Path) -> LoadConfig:
     with path.open() as file:
         data = yaml.safe_load(file) or {}
 
-    return LoadInputConfig(
+    return LoadConfig(
         power_sensors=_parse_power_sensors(data),
         estimated_consumers=_parse_estimated_consumers(data),
         constant_consumers=_parse_constant_consumers(data),
+        outputs=_parse_outputs(data),
     )
 
 def _parse_power_sensors(
@@ -62,6 +64,18 @@ def _parse_constant_consumers(
         configs[name] = ConstantConsumerConfig(
             name=name,
             estimated_power_w=consumer_data["estimated_power_w"],
+        )
+
+    return configs
+
+def _parse_outputs(
+    data: dict,
+) -> dict[str, OutputConfig]:
+    configs = {}
+
+    for name, output_data in data.get("outputs", {}).items():
+        configs[name] = OutputConfig(
+            entity_id=output_data["entity_id"],
         )
 
     return configs

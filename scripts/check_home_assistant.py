@@ -5,7 +5,7 @@ from energy_manager.config import (
     get_home_assistant_token,
     get_home_assistant_url,
 )
-from energy_manager.config_loader import load_input_config
+from energy_manager.config_loader import load_config
 from energy_manager.quality import evaluate_measurement_quality
 
 adapter = HomeAssistantAdapter(
@@ -13,11 +13,11 @@ adapter = HomeAssistantAdapter(
     token=get_home_assistant_token(),
 )
 
-input_config = load_input_config(
+config = load_config(
     Path("config/sensors.yaml")
 )
 
-smart_plug_config = input_config.power_sensors["smart_plug_valentin"]
+smart_plug_config = config.power_sensors["smart_plug_valentin"]
 
 measurement = adapter.get_power_measurement(
     smart_plug_config.entity_id

@@ -15,7 +15,8 @@ from energy_manager.models import (
     ConstantConsumerConfig,
     EntityState,
     EstimatedConsumerConfig,
-    LoadInputConfig,
+    LoadConfig,
+    OutputConfig,
     PowerChannelType,
     PowerContribution,
     PowerContributionStatus,
@@ -266,7 +267,7 @@ def test_constant_consumer_to_contribution() -> None:
 def test_estimate_load_combines_all_consumer_types() -> None:
     timestamp = datetime.now(UTC)
 
-    config = LoadInputConfig(
+    config = LoadConfig(
         power_sensors={
             "washing_machine": PowerSensorConfig(
                 name="washing_machine",
@@ -290,6 +291,10 @@ def test_estimate_load_combines_all_consumer_types() -> None:
                 name="fridge",
                 estimated_power_w=40.0,
             ),
+        },
+        outputs={
+            "estimated_total_load": OutputConfig(
+                entity_id="sensor.estimated_total_load"),
         },
     )
 
@@ -321,7 +326,7 @@ def test_estimate_load_combines_all_consumer_types() -> None:
     assert len(estimate.contributions) == 3
 
 def test_estimate_load_sets_missing_measurement_to_unavailable() -> None:
-    config = LoadInputConfig(
+    config = LoadConfig(
         power_sensors={
             "washing_machine": PowerSensorConfig(
                 name="washing_machine",
@@ -334,6 +339,7 @@ def test_estimate_load_sets_missing_measurement_to_unavailable() -> None:
         },
         estimated_consumers={},
         constant_consumers={},
+        outputs={},
     )
 
     estimate = estimate_load(
@@ -350,7 +356,7 @@ def test_estimate_load_sets_missing_measurement_to_unavailable() -> None:
     assert contribution.status is PowerContributionStatus.UNAVAILABLE
 
 def test_estimate_load_sets_missing_entity_state_to_unavailable() -> None:
-    config = LoadInputConfig(
+    config = LoadConfig(
         power_sensors={},
         estimated_consumers={
             "tv": EstimatedConsumerConfig(
@@ -361,6 +367,7 @@ def test_estimate_load_sets_missing_entity_state_to_unavailable() -> None:
             ),
         },
         constant_consumers={},
+        outputs={},
     )
 
     estimate = estimate_load(
@@ -380,7 +387,7 @@ def test_estimate_load_sets_missing_entity_state_to_unavailable() -> None:
 def test_estimate_load_ignores_non_consumer_power_channels() -> None:
     timestamp = datetime.now(UTC)
 
-    config = LoadInputConfig(
+    config = LoadConfig(
         power_sensors={
             "washing_machine": PowerSensorConfig(
                 name="washing_machine",
@@ -401,6 +408,7 @@ def test_estimate_load_ignores_non_consumer_power_channels() -> None:
         },
         estimated_consumers={},
         constant_consumers={},
+        outputs={},
     )
 
     measurements = {

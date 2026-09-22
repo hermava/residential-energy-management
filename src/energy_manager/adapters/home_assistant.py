@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import requests
 
 from energy_manager.exceptions import (
+    EntityUnavailableError,
     InvalidMeasurementError,
     MeasurementUnavailableError,
 )
@@ -34,6 +35,10 @@ class HomeAssistantAdapter:
             headers=self._headers,
             timeout=5,
         )
+        if response.status_code == 404:
+            raise EntityUnavailableError(
+                f"Home Assistant entity not found: {entity_id}"
+            )
         response.raise_for_status()
         return response.json()
 
@@ -65,7 +70,7 @@ class HomeAssistantAdapter:
         )
 
     def get_entity_state(self, entity_id: str) -> EntityState:
-        state = self.get_state(entity_id)
+        state = self._get_raw_state(entity_id)
 
         reported_at = datetime.fromisoformat(state["last_reported"])
         received_at = datetime.now(UTC)
@@ -76,3 +81,23 @@ class HomeAssistantAdapter:
             reported_at=reported_at,
             received_at=received_at,
         )
+
+    def publish_state(
+        self,
+        entity_id: str,
+        state: str,
+        attributes: dict | None = None,
+    ) -> None:
+        payload = {
+            "state": state,
+            "attributes": attributes or {},
+        }
+
+        response = requests.post(
+            f"{self._base_url}/api/states/{entity_id}",
+            headers=self._headers,
+            json=payload,
+            timeout=5,
+        )
+
+        response.raise_for_status()

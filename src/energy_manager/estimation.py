@@ -4,8 +4,8 @@ from energy_manager.models import (
     ConstantConsumerConfig,
     EntityState,
     EstimatedConsumerConfig,
+    LoadConfig,
     LoadEstimate,
-    LoadInputConfig,
     PowerChannelType,
     PowerContribution,
     PowerContributionStatus,
@@ -16,19 +16,6 @@ from energy_manager.models import (
 from energy_manager.quality import MeasurementQuality, evaluate_measurement_quality
 from energy_manager.validation import is_entity_state_fresh
 
-
-def estimate_consumer_power(
-    state: EntityState,
-    config: EstimatedConsumerConfig,
-) -> float:
-    normalized_state = state.state.strip().lower()
-    if normalized_state == "on" or normalized_state == "running":
-        return config.estimated_power_w
-    if normalized_state == "off":
-        return 0.0
-    raise InvalidMeasurementError(
-        f"Unsupported state for {state.source}: {state.state}"
-)
 
 def build_load_estimate(
     contributions: list[PowerContribution],
@@ -43,6 +30,18 @@ def build_load_estimate(
         contributions=tuple(contributions),
     )
 
+def estimate_consumer_power(
+    state: EntityState,
+    config: EstimatedConsumerConfig,
+) -> float:
+    normalized_state = state.state.strip().lower()
+    if normalized_state == "on" or normalized_state == "running" or normalized_state == "run":
+        return config.estimated_power_w
+    if normalized_state == "off" or normalized_state == "idle" or normalized_state == "ready":
+        return 0.0
+    raise InvalidMeasurementError(
+        f"Unsupported state for {state.source}: {state.state}"
+)
 
 def measurement_to_contribution(
     measurement: PowerMeasurement,
@@ -114,18 +113,15 @@ def constant_consumer_to_contribution(
         contribution_type=PowerContributionType.CONSTANT_ESTIMATED,
     )
 
-
 def estimate_load(
     measurements: dict[str, PowerMeasurement],
     entity_states: dict[str, EntityState],
-    config: LoadInputConfig,
+    config: LoadConfig,
 ) -> LoadEstimate:
     contributions = []
-
     for name, sensor_config in config.power_sensors.items():
         if sensor_config.channel_type is not PowerChannelType.CONSUMER:
             continue
-
         measurement = measurements.get(name)
         if measurement is None:
             contributions.append(
@@ -138,12 +134,10 @@ def estimate_load(
                 )
             )
             continue
-
         quality = evaluate_measurement_quality(
             measurement,
             sensor_config,
         )
-
         contributions.append(
             measurement_to_contribution(
                 measurement,
@@ -151,10 +145,8 @@ def estimate_load(
                 quality,
             )
         )
-
     for name, consumer_config in config.estimated_consumers.items():
         state = entity_states.get(name)
-
         if state is None:
             contributions.append(
                 PowerContribution(
@@ -166,12 +158,10 @@ def estimate_load(
                 )
             )
             continue
-
         is_fresh = is_entity_state_fresh(
             state,
             consumer_config.max_age_seconds,
         )
-
         contributions.append(
             estimated_consumer_to_contribution(
                 state,
@@ -179,10 +169,8 @@ def estimate_load(
                 is_fresh,
             )
         )
-
     for consumer_config in config.constant_consumers.values():
         contributions.append(
             constant_consumer_to_contribution(consumer_config)
         )
-
     return build_load_estimate(contributions)

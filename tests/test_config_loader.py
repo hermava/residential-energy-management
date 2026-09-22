@@ -1,4 +1,4 @@
-from energy_manager.config_loader import load_input_config
+from energy_manager.config_loader import load_config
 from energy_manager.models import PowerChannelType
 
 
@@ -17,7 +17,7 @@ power_sensors:
 """
     )
 
-    config = load_input_config(config_file)
+    config = load_config(config_file)
 
     sensor = config.power_sensors["washing_machine"]    
 
@@ -41,7 +41,7 @@ estimated_consumers:
 """
     )
 
-    config = load_input_config(config_file)
+    config = load_config(config_file)
 
     consumer = config.estimated_consumers["tv"]
 
@@ -61,9 +61,24 @@ constant_consumers:
 """
     )
 
-    config = load_input_config(config_file)
+    config = load_config(config_file)
 
     consumer = config.constant_consumers["fridge"]
 
     assert consumer.name == "fridge"
     assert consumer.estimated_power_w == 40
+
+def test_load_outputs(tmp_path) -> None:
+    config_file = tmp_path / "sensors.yaml"
+
+    config_file.write_text(
+        """
+outputs:
+  estimated_total_load:
+    entity_id: sensor.residential_estimated_total_load
+"""
+    )
+    config = load_config(config_file)
+    output = config.outputs["estimated_total_load"]
+
+    assert output.entity_id == "sensor.residential_estimated_total_load"
