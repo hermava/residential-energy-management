@@ -19,3 +19,9 @@ constant_consumers:
 outputs:
   estimated_total_load:
     entity_id: sensor.residential_estimated_total_load
+
+battery:
+  capacity_wh: 2500
+  min_soc_percent: 20
+  max_output_power_w: 800
+  max_age_seconds: 120

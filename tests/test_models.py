@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 import pytest
 
 from energy_manager.models import (
+    BatteryState,
+    EnergyForecast,
     EntityState,
     EstimatedConsumerConfig,
     LoadEstimate,
@@ -248,3 +250,76 @@ def test_load_estimate_keeps_contributions() -> None:
 
     assert estimate.total_power_w == 85.0
     assert estimate.contributions == (contribution,)
+
+def test_battery_state_creation() -> None:
+    timestamp = datetime.now(UTC)
+    state = BatteryState(
+        soc_percent=62.0,
+        input_power_w=180.0,
+        output_power_w=0.0,
+        reported_at=timestamp,
+        received_at=timestamp,
+    )
+
+    assert state.soc_percent == 62.0
+    assert state.input_power_w == 180.0
+    assert state.output_power_w == 0.0
+    assert state.reported_at == timestamp
+    assert state.received_at == timestamp
+
+def test_battery_state_rejects_invalid_soc() -> None:
+    with pytest.raises(
+        ValueError,
+        match="soc_percent must be between 0 and 100",
+    ):
+        timestamp = datetime.now(UTC)
+        BatteryState(
+            soc_percent=105.0,
+            input_power_w=0.0,
+            output_power_w=0.0,
+            reported_at=timestamp,
+            received_at=timestamp,
+        )
+
+def test_battery_state_rejects_negative_power() -> None:
+    with pytest.raises(
+        ValueError,
+        match="input_power_w must not be negative",
+    ):
+        timestamp = datetime.now(UTC)
+        BatteryState(
+            soc_percent=50.0,
+            input_power_w=-1.0,
+            output_power_w=0.0,
+            reported_at=timestamp,
+            received_at=timestamp,
+        )
+
+def test_energy_forecast_creation() -> None:
+    forecast = EnergyForecast(
+        horizon_hours=6.0,
+        expected_input_energy_wh=850.0,
+    )
+
+    assert forecast.horizon_hours == 6.0
+    assert forecast.expected_input_energy_wh == 850.0
+
+def test_energy_forecast_rejects_invalid_horizon() -> None:
+    with pytest.raises(
+        ValueError,
+        match="horizon_hours must be greater than zero",
+    ):
+        EnergyForecast(
+            horizon_hours=0.0,
+            expected_input_energy_wh=850.0,
+        )
+
+def test_energy_forecast_rejects_negative_energy() -> None:
+    with pytest.raises(
+        ValueError,
+        match="expected_input_energy_wh must not be negative",
+    ):
+        EnergyForecast(
+            horizon_hours=6.0,
+            expected_input_energy_wh=-1.0,
+        )

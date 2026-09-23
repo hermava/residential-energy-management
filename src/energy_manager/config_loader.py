@@ -3,6 +3,7 @@ from pathlib import Path
 import yaml
 
 from energy_manager.models import (
+    BatteryConfig,
     ConstantConsumerConfig,
     EstimatedConsumerConfig,
     LoadConfig,
@@ -21,6 +22,7 @@ def load_config(path: Path) -> LoadConfig:
         estimated_consumers=_parse_estimated_consumers(data),
         constant_consumers=_parse_constant_consumers(data),
         outputs=_parse_outputs(data),
+        battery=_parse_battery(data),
     )
 
 def _parse_power_sensors(
@@ -79,3 +81,13 @@ def _parse_outputs(
         )
 
     return configs
+
+def _parse_battery(data: dict) -> BatteryConfig:
+    battery_data = data["battery"]
+
+    return BatteryConfig(
+        capacity_wh=battery_data["capacity_wh"],
+        min_soc_percent=battery_data["min_soc_percent"],
+        max_output_power_w=battery_data["max_output_power_w"],
+        max_age_seconds=battery_data["max_age_seconds"],
+    )

@@ -128,14 +128,66 @@ class OutputConfig:
             raise ValueError("entity_id must not be empty")
 
 @dataclass(frozen=True)
+class BatteryConfig:
+    capacity_wh: float
+    min_soc_percent: float
+    max_output_power_w: float
+    max_age_seconds: float
+
+    def __post_init__(self) -> None:
+        if self.capacity_wh <= 0:
+            raise ValueError("capacity_wh must be greater than zero")
+
+        if not 0.0 <= self.min_soc_percent <= 100.0:
+            raise ValueError("min_soc_percent must be between 0 and 100")
+
+        if self.max_output_power_w <= 0:
+            raise ValueError("max_output_power_w must be greater than zero")
+
+@dataclass(frozen=True)
 class LoadConfig:
     power_sensors: dict[str, PowerSensorConfig]
     estimated_consumers: dict[str, EstimatedConsumerConfig]
     constant_consumers: dict[str, ConstantConsumerConfig]
     outputs: dict[str, OutputConfig]
+    battery: BatteryConfig
 
 @dataclass(frozen=True)
 class LoadEstimate:
     total_power_w: float
     contributions: tuple[PowerContribution, ...]
+
+@dataclass(frozen=True)
+class BatteryState:
+    soc_percent: float
+    input_power_w: float
+    output_power_w: float
+    reported_at: datetime
+    received_at: datetime
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.soc_percent <= 100.0:
+            raise ValueError("soc_percent must be between 0 and 100")
+
+        if self.input_power_w < 0:
+            raise ValueError("input_power_w must not be negative")
+
+        if self.output_power_w < 0:
+            raise ValueError("output_power_w must not be negative")
+
+@dataclass(frozen=True)
+class EnergyForecast:
+    horizon_hours: float
+    expected_input_energy_wh: float
+
+    def __post_init__(self) -> None:
+        if self.horizon_hours <= 0:
+            raise ValueError("horizon_hours must be greater than zero")
+
+        if self.expected_input_energy_wh < 0:
+            raise ValueError(
+                "expected_input_energy_wh must not be negative"
+            )
+
+
 

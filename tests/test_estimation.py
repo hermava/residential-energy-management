@@ -12,6 +12,7 @@ from energy_manager.estimation import (
 )
 from energy_manager.exceptions import InvalidMeasurementError
 from energy_manager.models import (
+    BatteryConfig,
     ConstantConsumerConfig,
     EntityState,
     EstimatedConsumerConfig,
@@ -46,6 +47,15 @@ def power_sensor_config() -> PowerSensorConfig:
         max_power_w=2500.0,
         max_age_seconds=30.0,
     )   
+
+@pytest.fixture
+def battery_config() -> BatteryConfig:
+    return BatteryConfig(
+        capacity_wh=2240,
+        min_soc_percent=10,
+        max_output_power_w=800,
+        max_age_seconds=30,
+    )
 
 
 def test_estimate_consumer_power_when_on(consumer_config):
@@ -264,7 +274,7 @@ def test_constant_consumer_to_contribution() -> None:
     assert contribution.source is None
 
 
-def test_estimate_load_combines_all_consumer_types() -> None:
+def test_estimate_load_combines_all_consumer_types(battery_config) -> None:
     timestamp = datetime.now(UTC)
 
     config = LoadConfig(
@@ -296,6 +306,7 @@ def test_estimate_load_combines_all_consumer_types() -> None:
             "estimated_total_load": OutputConfig(
                 entity_id="sensor.estimated_total_load"),
         },
+        battery=battery_config,
     )
 
     measurements = {
@@ -325,7 +336,7 @@ def test_estimate_load_combines_all_consumer_types() -> None:
     assert estimate.total_power_w == 305.0
     assert len(estimate.contributions) == 3
 
-def test_estimate_load_sets_missing_measurement_to_unavailable() -> None:
+def test_estimate_load_sets_missing_measurement_to_unavailable(battery_config) -> None:
     config = LoadConfig(
         power_sensors={
             "washing_machine": PowerSensorConfig(
@@ -340,6 +351,7 @@ def test_estimate_load_sets_missing_measurement_to_unavailable() -> None:
         estimated_consumers={},
         constant_consumers={},
         outputs={},
+        battery=battery_config,
     )
 
     estimate = estimate_load(
@@ -355,7 +367,7 @@ def test_estimate_load_sets_missing_measurement_to_unavailable() -> None:
     assert contribution.power_w == 0.0
     assert contribution.status is PowerContributionStatus.UNAVAILABLE
 
-def test_estimate_load_sets_missing_entity_state_to_unavailable() -> None:
+def test_estimate_load_sets_missing_entity_state_to_unavailable(battery_config) -> None:
     config = LoadConfig(
         power_sensors={},
         estimated_consumers={
@@ -368,6 +380,7 @@ def test_estimate_load_sets_missing_entity_state_to_unavailable() -> None:
         },
         constant_consumers={},
         outputs={},
+        battery=battery_config,
     )
 
     estimate = estimate_load(
@@ -384,7 +397,7 @@ def test_estimate_load_sets_missing_entity_state_to_unavailable() -> None:
     assert contribution.status is PowerContributionStatus.UNAVAILABLE
 
 
-def test_estimate_load_ignores_non_consumer_power_channels() -> None:
+def test_estimate_load_ignores_non_consumer_power_channels(battery_config) -> None:
     timestamp = datetime.now(UTC)
 
     config = LoadConfig(
@@ -409,6 +422,7 @@ def test_estimate_load_ignores_non_consumer_power_channels() -> None:
         estimated_consumers={},
         constant_consumers={},
         outputs={},
+        battery=battery_config,
     )
 
     measurements = {
