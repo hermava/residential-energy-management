@@ -20,6 +20,18 @@ outputs:
   estimated_total_load:
     entity_id: sensor.residential_estimated_total_load
 
+  battery_soc:
+    entity_id: sensor.residential_battery_soc
+
+  battery_input_power:
+    entity_id: sensor.residential_battery_input_power
+
+  battery_output_power:
+    entity_id: sensor.residential_battery_output_power
+
+  battery_output_target:
+    entity_id: sensor.residential_battery_output_target
+
 battery:
   capacity_wh: 2500
   min_soc_percent: 20
