@@ -90,4 +90,5 @@ def _parse_battery(data: dict) -> BatteryConfig:
         min_soc_percent=battery_data["min_soc_percent"],
         max_output_power_w=battery_data["max_output_power_w"],
         max_age_seconds=battery_data["max_age_seconds"],
+        control_inhibit_soc_percent=float(battery_data["control_inhibit_soc_percent"]),
     )

@@ -17,6 +17,7 @@ def battery_config() -> BatteryConfig:
         min_soc_percent=10.0,
         max_output_power_w=800.0,
         max_age_seconds=30.0,
+        control_inhibit_soc_percent=95.0,
     )
 
 def _make_battery_state(

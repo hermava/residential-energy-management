@@ -133,16 +133,17 @@ class BatteryConfig:
     min_soc_percent: float
     max_output_power_w: float
     max_age_seconds: float
+    control_inhibit_soc_percent: float
 
     def __post_init__(self) -> None:
         if self.capacity_wh <= 0:
             raise ValueError("capacity_wh must be greater than zero")
-
         if not 0.0 <= self.min_soc_percent <= 100.0:
             raise ValueError("min_soc_percent must be between 0 and 100")
-
         if self.max_output_power_w <= 0:
             raise ValueError("max_output_power_w must be greater than zero")
+        if not 0.0 <= self.control_inhibit_soc_percent <= 100.0:
+            raise ValueError("control_inhibit_soc_percent must be between 0 and 100")
 
 @dataclass(frozen=True)
 class LoadConfig:

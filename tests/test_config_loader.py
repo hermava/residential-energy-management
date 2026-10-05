@@ -11,6 +11,7 @@ def _write_config(
     min_soc_percent: float = 10,
     max_output_power_w: float = 800,
     max_age_seconds: float = 30,
+    control_inhibit_soc_percent: float = 95
 ) -> Path:
     config_file = tmp_path / "sensors.yaml"
 
@@ -21,7 +22,7 @@ battery:
   min_soc_percent: {min_soc_percent}
   max_output_power_w: {max_output_power_w}
   max_age_seconds: {max_age_seconds}
-
+  control_inhibit_soc_percent: {control_inhibit_soc_percent}
 {additional_config}
 """
     )
@@ -66,11 +67,8 @@ estimated_consumers:
     max_age_seconds: 60
 """,
     )
-
     config = load_config(config_file)
-
     consumer = config.estimated_consumers["tv"]
-
     assert consumer.name == "tv"
     assert consumer.entity_id == "switch.tv"
     assert consumer.estimated_power_w == 85
@@ -86,11 +84,8 @@ constant_consumers:
     estimated_power_w: 40
 """,
     )
-
     config = load_config(config_file)
-
     consumer = config.constant_consumers["fridge"]
-
     assert consumer.name == "fridge"
     assert consumer.estimated_power_w == 40
 
@@ -118,6 +113,8 @@ def test_load_battery_config(tmp_path: Path) -> None:
         capacity_wh=2500,
         min_soc_percent=20,
         max_output_power_w=800,
+        max_age_seconds=30,
+        control_inhibit_soc_percent=95,
     )
 
     config = load_config(config_file)
@@ -126,3 +123,4 @@ def test_load_battery_config(tmp_path: Path) -> None:
     assert config.battery.min_soc_percent == 20
     assert config.battery.max_output_power_w == 800
     assert config.battery.max_age_seconds == 30
+    assert config.battery.control_inhibit_soc_percent == 95

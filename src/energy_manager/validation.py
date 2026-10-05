@@ -6,7 +6,6 @@ def is_measurement_fresh(
     max_age_seconds: float,
 ) -> bool:
     age = measurement.received_at - measurement.reported_at
-
     return age.total_seconds() <= max_age_seconds
 
 def is_entity_state_fresh(

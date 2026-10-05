@@ -24,7 +24,6 @@ def build_load_estimate(
         contribution.power_w
         for contribution in contributions
     )
-
     return LoadEstimate(
         total_power_w=total_power_w,
         contributions=tuple(contributions),
@@ -51,18 +50,14 @@ def measurement_to_contribution(
     if quality is MeasurementQuality.VALID:
         power_w = measurement.power_w
         status = PowerContributionStatus.VALID
-
     elif quality is MeasurementQuality.STALE:
         power_w = 0.0
         status = PowerContributionStatus.STALE
-
     elif quality is MeasurementQuality.IMPLAUSIBLE:
         power_w = 0.0
         status = PowerContributionStatus.IMPLAUSIBLE
-
     else:
         raise ValueError(f"Unsupported measurement quality: {quality}")
-
     return PowerContribution(
         name=config.name,
         source=measurement.source,
@@ -93,9 +88,7 @@ def estimated_consumer_to_contribution(
             contribution_type=PowerContributionType.STATE_ESTIMATED,
             status=PowerContributionStatus.STALE,
         )
-
     power_w = estimate_consumer_power(state, config)
-
     return PowerContribution(
         name=config.name,
         source=state.source,

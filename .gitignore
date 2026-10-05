@@ -9,6 +9,7 @@ __pycache__/
 # Testing / tooling
 .pytest_cache/
 .ruff_cache/
+data/
 
 # IDE
 .vscode/
