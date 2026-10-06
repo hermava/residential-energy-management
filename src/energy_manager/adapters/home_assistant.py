@@ -44,24 +44,19 @@ class HomeAssistantAdapter:
 
     def get_power_measurement(self, entity_id: str) -> PowerMeasurement:
         state = self._get_raw_state(entity_id)
-
         raw_power = state["state"]
-
         if raw_power in {"unknown", "unavailable"}:
             raise MeasurementUnavailableError(
                 f"Power measurement for {entity_id} is {raw_power}"
             )
-
         try:
             power_w = float(raw_power)
         except ValueError as exc:
             raise InvalidMeasurementError(
                 f"Invalid power value for {entity_id}: {raw_power}"
             ) from exc
-
         reported_at = datetime.fromisoformat(state["last_reported"])
         received_at = datetime.now(UTC)
-
         return PowerMeasurement(
             source=entity_id,
             power_w=power_w,
