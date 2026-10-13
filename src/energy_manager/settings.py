@@ -1,0 +1,31 @@
+# Structural extraction from run_energy_manager.py (V5).
+# Keep behavior/settings unchanged; see REFACTORING_NOTES.md.
+from pathlib import Path
+
+UPDATE_INTERVAL_SECONDS = 10
+LOG_PATH = Path("data/marstek_status_closed_loop_V5.csv")
+LOG_RETENTION_DAYS = 10
+COMMAND_DEADBAND_W = 10.0
+MIN_COMMAND_INTERVAL_SECONDS = 60.0
+MIN_TEST_COMMAND_POWER_W = 130.0
+
+# Experimental, automatic oscillation recovery.
+# Disable automatic recovery if that is unacceptable in your installation.
+RECOVERY_ENABLED = True
+RECOVERY_TARGET_W = 800.0
+RECOVERY_DURATION_SECONDS = 190
+RECOVERY_COOLDOWN_SECONDS = 6 * 60
+RECOVERY_SOC_MARGIN_PERCENT = 1.0
+RECOVERY_CONFIRM_TOLERANCE_W = 5.0
+RECOVERY_RETRY_SECONDS = 30
+RECOVERY_STATE_PATH = Path("data/marstek_recovery_state.json")
+
+# Monitoring thresholds.
+OSC_WINDOW_SECONDS = 120.0
+OSC_MAX_GAP_SECONDS = 25.0
+OSC_MAX_TARGET_RANGE_W = 30.0
+OSC_MAX_INPUT_RANGE_W = 75.0
+OSC_MIN_OUTPUT_RANGE_W = 15.0
+OSC_MIN_DIRECTION_CHANGE_W = 10.0
+OSC_MIN_REVERSALS = 3
+OSC_CLEAR_DELAY_SECONDS = 60.0
