@@ -7,7 +7,7 @@ LOG_PATH = Path("data/marstek_status_closed_loop_V5.csv")
 LOG_RETENTION_DAYS = 10
 COMMAND_DEADBAND_W = 10.0
 MIN_COMMAND_INTERVAL_SECONDS = 60.0
-MIN_TEST_COMMAND_POWER_W = 130.0
+MIN_TEST_COMMAND_POWER_W = 120.0
 
 # Experimental, automatic oscillation recovery.
 # Disable automatic recovery if that is unacceptable in your installation.
