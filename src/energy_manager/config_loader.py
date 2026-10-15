@@ -2,10 +2,13 @@ from pathlib import Path
 
 import yaml
 
+from energy_manager.forecast.correction import CORRECTION_METHODS
 from energy_manager.models import (
     BatteryConfig,
     ConstantConsumerConfig,
+    EnergyForecastConfig,
     EstimatedConsumerConfig,
+    ForecastCorrectionConfig,
     ForecastSensorConfig,
     ForecastSourceConfig,
     LoadConfig,
@@ -26,6 +29,8 @@ def load_config(path: Path) -> LoadConfig:
         outputs=_parse_outputs(data),
         battery=_parse_battery(data),
         forecast_sources=_parse_forecast_sources(data),
+        forecast_correction=_parse_forecast_correction(data),
+        energy_forecast=EnergyForecastConfig(**data.get("energy_forecast", {})),
     )
 
 def _parse_power_sensors(
@@ -44,6 +49,13 @@ def _parse_power_sensors(
         )
 
     return configs
+
+
+def _parse_forecast_correction(data: dict) -> ForecastCorrectionConfig:
+    config = ForecastCorrectionConfig(**data.get("forecast_correction", {}))
+    if config.method not in CORRECTION_METHODS:
+        raise ValueError(f"Unknown forecast correction method: {config.method}")
+    return config
 
 def _parse_estimated_consumers(
     data: dict,

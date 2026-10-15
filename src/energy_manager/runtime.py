@@ -7,13 +7,20 @@ from energy_manager.adapters.marstek_mqtt import MarstekMqttAdapter
 from energy_manager.battery_control import _apply_marstek_control, _get_marstek_status
 from energy_manager.controller import calculate_battery_output_target
 from energy_manager.csv_logging import _append_marstek_log
+from energy_manager.daily_energy import update_daily_energy
 from energy_manager.estimation import estimate_load
-from energy_manager.forecast.forecast_data import update_forecast_logging
+from energy_manager.forecast.daily_forecast import update_daily_forecast
+from energy_manager.forecast.forecast_data import (
+    update_forecast_correction,
+    update_forecast_logging,
+    update_input_history,
+)
 from energy_manager.ha_reporting import (
     _collect_ha_inputs,
     _get_quality_diagnostics,
     _publish_battery_states,
     _publish_controller_target,
+    _publish_daily_energy,
     _publish_load_estimate,
     _publish_oscillation_monitor,
     _publish_recovery_status,
@@ -119,6 +126,16 @@ def _run_cycle(
     )
     _print_cycle_status(load_estimate, battery_state, target_power_w)
     try:
+        if any(name in config.outputs for name in (
+            "battery_input_energy_today", "battery_output_energy_today",
+        )):
+            energy = update_daily_energy(
+                battery_state, forecast_state, config.battery.max_age_seconds,
+            )
+            _publish_daily_energy(config, ha, energy)
+    except (OSError, ValueError, KeyError, TypeError, requests.RequestException) as exc:
+        print(f"Daily energy reporting failed: {exc}")
+    try:
         _publish_oscillation_monitor(
             ha=ha,
             status=marstek_status,
@@ -131,8 +148,18 @@ def _run_cycle(
     except requests.RequestException as exc:
         print(f"Recovery monitor publish failed: {exc}")
     try:
+        update_input_history(battery_state, forecast_state, config.battery.max_age_seconds)
+        update_forecast_correction(ha, config, battery_state, forecast_state)
+    except (ValueError, requests.RequestException) as exc:
+        forecast_state.pop("correction", None)
+        print(f"Forecast correction failed: {exc}")
+    try:
         update_forecast_logging(ha, config, battery_state, forecast_state)
     except (OSError, ValueError, requests.RequestException) as exc:
         print(f"Forecast logging failed: {exc}")
+    try:
+        update_daily_forecast(ha, config, battery_state, forecast_state)
+    except (OSError, ValueError, requests.RequestException) as exc:
+        print(f"Daily forecast failed: {exc}")
 
     return last_command_w, last_command_time

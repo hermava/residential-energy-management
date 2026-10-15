@@ -1,14 +1,17 @@
 # Structural extraction from run_energy_manager.py (V5).
 # Keep behavior/settings unchanged; see REFACTORING_NOTES.md.
-from datetime import UTC, datetime
+from dataclasses import asdict
+from datetime import UTC, datetime, time
 
 from energy_manager.adapters.home_assistant import HomeAssistantAdapter
 from energy_manager.adapters.marstek_mqtt import MarstekStatus
+from energy_manager.daily_energy import LOCAL_TIMEZONE, DailyEnergy
 from energy_manager.exceptions import (
     EntityUnavailableError,
     InvalidMeasurementError,
     MeasurementUnavailableError,
 )
+from energy_manager.forecast.energy_forecast import DailyEnergyForecast
 from energy_manager.models import (
     PowerChannelType,
     PowerContributionStatus,
@@ -209,6 +212,46 @@ def _publish_battery_states(config, ha: HomeAssistantAdapter, battery_state) -> 
             "state_class": "measurement",
         },
     )
+
+def _publish_daily_energy(config, ha: HomeAssistantAdapter, energy: DailyEnergy) -> None:
+    midnight = datetime.combine(energy.day, time.min, LOCAL_TIMEZONE)
+    for direction, value in (("input", energy.input_wh), ("output", energy.output_wh)):
+        output = config.outputs.get(f"battery_{direction}_energy_today")
+        if output is None:
+            continue
+        ha.publish_state(
+            output.entity_id,
+            f"{value / 1000:.6f}",
+            attributes={
+                "friendly_name": f"Residential Battery {direction.title()} Energy Today",
+                "unit_of_measurement": "kWh",
+                "device_class": "energy",
+                "state_class": "total_increasing",
+                "day": energy.day.isoformat(),
+                "timezone": str(LOCAL_TIMEZONE),
+                "complete": energy.complete,
+                "integration_method": "trapezoidal",
+                "period_start": midnight.isoformat(),
+            },
+        )
+
+
+def _publish_energy_forecast(
+    config, ha: HomeAssistantAdapter, forecast: DailyEnergyForecast, context: dict,
+) -> None:
+    output = config.outputs.get("energy_forecast_today")
+    if output is None:
+        return
+    ha.publish_state(
+        output.entity_id,
+        forecast.assessment,
+        attributes={
+            "friendly_name": "Residential Energy Forecast Today",
+            **asdict(forecast),
+            **context,
+        },
+    )
+
 
 def _publish_controller_target(
     config,

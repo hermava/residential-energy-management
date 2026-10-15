@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from energy_manager.config_loader import load_config
 from energy_manager.models import PowerChannelType
 
@@ -124,3 +126,86 @@ def test_load_battery_config(tmp_path: Path) -> None:
     assert config.battery.max_output_power_w == 800
     assert config.battery.max_age_seconds == 30
     assert config.battery.control_inhibit_soc_percent == 95
+
+
+def test_load_forecast_correction_and_power_sensor(tmp_path):
+    path = _write_config(tmp_path, """
+forecast_sources:
+  solar:
+    provider: forecast_solar
+    power_now:
+      entity_id: sensor.power_production_now
+      unit: W
+forecast_correction:
+  method: ratio_of_means_v1
+  min_factor: 0.5
+  max_factor: 2
+  min_forecast_power_w: 100
+  max_age_seconds: 900
+""")
+    config = load_config(path)
+    assert config.forecast_correction.min_factor == 0.5
+    assert config.forecast_correction.max_factor == 2
+    assert config.forecast_correction.min_forecast_power_w == 100
+    assert config.forecast_correction.max_age_seconds == 900
+    assert config.forecast_sources["solar"].values["power_now"].unit == "W"
+
+
+def test_unknown_correction_method_is_rejected(tmp_path):
+    path = _write_config(tmp_path, "forecast_correction:\n  method: typo\n")
+    with pytest.raises(ValueError, match="Unknown forecast correction method"):
+        load_config(path)
+
+
+def test_daily_energy_outputs_are_loaded(tmp_path):
+    path = _write_config(tmp_path, """
+outputs:
+  battery_input_energy_today:
+    entity_id: sensor.residential_battery_input_energy_today
+  battery_output_energy_today:
+    entity_id: sensor.residential_battery_output_energy_today
+""")
+    config = load_config(path)
+    for direction in ("input", "output"):
+        name = f"battery_{direction}_energy_today"
+        assert config.outputs[name].entity_id == f"sensor.residential_{name}"
+
+
+def test_energy_forecast_configuration(tmp_path):
+    path = _write_config(tmp_path, """
+energy_forecast:
+  consumption_w: 150
+  surplus_min_soc_percent: 35
+  surplus_target_soc_percent: 96
+  reserve_soc_percent: 25
+  input_history_max_age_seconds: 90
+  input_efficiency: 0.9
+  output_efficiency: 0.85
+  max_age_seconds: 1800
+""")
+    config = load_config(path).energy_forecast
+    assert config.consumption_w == 150
+    assert config.surplus_min_soc_percent == 35
+    assert config.surplus_target_soc_percent == 96
+    assert config.reserve_soc_percent == 25
+    assert config.input_history_max_age_seconds == 90
+    assert config.input_efficiency == 0.9
+    assert config.output_efficiency == 0.85
+    assert config.max_age_seconds == 1800
+
+
+def test_sunset_source_and_forecast_output(tmp_path):
+    path = _write_config(tmp_path, """
+outputs:
+  energy_forecast_today:
+    entity_id: sensor.custom_forecast
+forecast_sources:
+  daylight:
+    provider: home_assistant
+    sunset:
+      entity_id: sensor.sun_next_setting
+""")
+    config = load_config(path)
+    sunset = config.forecast_sources["daylight"].values["sunset"]
+    assert sunset.entity_id == "sensor.sun_next_setting"
+    assert config.outputs["energy_forecast_today"].entity_id == "sensor.custom_forecast"

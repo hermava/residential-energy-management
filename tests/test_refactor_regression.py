@@ -12,6 +12,9 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import pytest
+import requests
+
 from energy_manager import battery_control, csv_logging, oscillation, recovery, runtime
 
 
@@ -236,8 +239,17 @@ def test_recovery_info_pending_until_confirmed():
     assert info["recovery_state"] == "restore_pending"
 
 
-def test_runtime_wires_cycle_without_hardware():
+@pytest.mark.parametrize("correction_error", [None, ValueError("bad correction source")])
+@pytest.mark.parametrize("daily_error", [None, OSError("state save failed")])
+@pytest.mark.parametrize(
+    "forecast_error", [None, OSError("log failed"), requests.ConnectionError()],
+)
+def test_runtime_wires_cycle_without_hardware(correction_error, daily_error, forecast_error):
     cfg = config()
+    cfg.outputs = {"battery_input_energy_today": Mock()}
+    daily_update = Mock(side_effect=daily_error)
+    daily_publish = Mock()
+    daily_forecast = Mock(side_effect=forecast_error)
     # This is a mocked orchestration test: it checks cross-module wiring
     # without HA, MQTT or device state changes.
     ha = Mock()
@@ -252,6 +264,8 @@ def test_runtime_wires_cycle_without_hardware():
     history = deque()
     oscillation_state = {"last_detected_at": None}
     forecast_state = {"last_log_at": None}
+    cfg.battery.max_age_seconds = 120
+    forecast_update = Mock()
     st = status()
     patches = [
         patch.object(runtime, "_collect_ha_inputs", return_value=({}, {})),
@@ -272,8 +286,13 @@ def test_runtime_wires_cycle_without_hardware():
         patch.object(runtime, "_publish_controller_target"),
         patch.object(runtime, "_publish_oscillation_monitor"),
         patch.object(runtime, "_publish_recovery_status"),
+        patch.object(runtime, "update_daily_energy", daily_update),
+        patch.object(runtime, "_publish_daily_energy", daily_publish),
+        patch.object(runtime, "update_daily_forecast", daily_forecast),
         patch.object(runtime, "_print_cycle_status"),
         patch.object(runtime, "update_forecast_logging"),
+        patch.object(runtime, "update_input_history", forecast_update),
+        patch.object(runtime, "update_forecast_correction", side_effect=correction_error),
     ]
     from contextlib import ExitStack
     with ExitStack() as stack:
@@ -286,5 +305,13 @@ def test_runtime_wires_cycle_without_hardware():
         mocks[9].assert_called_once()
         mocks[12].assert_called_once()
         mocks[13].assert_called_once()
+        mocks[-3].assert_called_once_with(ha, cfg, st.battery_state, forecast_state)
         mocks[-1].assert_called_once_with(ha, cfg, st.battery_state, forecast_state)
+        forecast_update.assert_called_once_with(st.battery_state, forecast_state, 120)
+        daily_update.assert_called_once_with(st.battery_state, forecast_state, 120)
+        daily_forecast.assert_called_once_with(ha, cfg, st.battery_state, forecast_state)
+        if daily_error is None:
+            daily_publish.assert_called_once_with(cfg, ha, daily_update.return_value)
+        else:
+            daily_publish.assert_not_called()
         assert oscillation_state["recovery_trigger_ready"] is False

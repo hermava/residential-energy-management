@@ -17,6 +17,15 @@ constant_consumers:
     estimated_power_w: 50
 
 outputs:
+  energy_forecast_today:
+    entity_id: sensor.residential_energy_forecast_today
+
+  battery_input_energy_today:
+    entity_id: sensor.residential_battery_input_energy_today
+
+  battery_output_energy_today:
+    entity_id: sensor.residential_battery_output_energy_today
+
   estimated_total_load:
     entity_id: sensor.residential_estimated_total_load
 
@@ -40,8 +49,16 @@ battery:
   control_inhibit_soc_percent: 95
 
 forecast_sources:
+  daylight:
+    provider: home_assistant
+    sunset:
+      entity_id: sensor.sun_next_setting
+
   solar:
     provider: forecast_solar
+    power_now:
+      entity_id: sensor.power_production_now
+      unit: W
     next_hour:
       entity_id: sensor.energy_next_hour
       unit: kWh
@@ -62,3 +79,22 @@ forecast_sources:
     temperature:
       entity_id: sensor.openweathermap_temperature
       unit: "°C"
+
+# Heuristic correction for today's remaining energy; limits need calibration.
+forecast_correction:
+  method: ratio_of_means_v1
+  min_forecast_power_w: 50
+  min_factor: 0.25
+  max_factor: 4
+  max_age_seconds: 1800
+
+# Aggregate balance only; 1.0 efficiencies explicitly assume no losses.
+energy_forecast:
+  consumption_w: 130
+  surplus_min_soc_percent: 30
+  surplus_target_soc_percent: 95
+  reserve_soc_percent: 30
+  input_history_max_age_seconds: 120
+  input_efficiency: 1.0
+  output_efficiency: 1.0
+  max_age_seconds: 3600

@@ -34,3 +34,8 @@ FORECAST_LOG_PATH = Path("data/energy_forecast_history.csv")
 FORECAST_LOG_INTERVAL_SECONDS = 60
 FORECAST_INPUT_HISTORY_SECONDS = 10 * 60
 FORECAST_MIN_HISTORY_SAMPLES = 10
+FORECAST_CORRECTION_LOG_PATH = Path("data/energy_forecast_correction.csv")
+FORECAST_DAILY_LOG_PATH = Path("data/energy_forecast_daily_v2.csv")
+
+DAILY_ENERGY_STATE_PATH = Path("data/battery_daily_energy.json")
+DAILY_ENERGY_MAX_GAP_SECONDS = 30.0
