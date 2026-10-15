@@ -101,9 +101,12 @@ def test_high_soc_inhibits_new_command():
 
 
 def test_minimum_command_floor_and_deadband():
-    result, device, _ = control(controller_target=41)
+    result, device, _ = control(controller_target=41, previous_target=120, device_target=120)
     assert result[3] == "deadband"
     device.set_output_power.assert_not_called()
+    result, device, _ = control(controller_target=41, previous_target=200, device_target=200)
+    assert result[3] == "command_sent"
+    device.set_output_power.assert_called_once_with(120.0)
 
 
 def test_minimum_interval_still_applies():
@@ -119,21 +122,21 @@ def test_normal_command_after_hold():
     device.set_output_power.assert_called_once_with(500.0)
 
 
-def test_recovery_starts_at_400_w_and_persists_intent():
+def test_recovery_starts_at_800_w_and_persists_intent():
     result, device, state = control(
         controller_target=41, recovery_requested=True,
     )
     assert result[3] == "recovery_started"
     assert state["active_until"] is not None
     assert state["last_attempt_at"] is not None
-    device.set_output_power.assert_called_once_with(400.0)
+    device.set_output_power.assert_called_once_with(800.0)
 
 
 def test_recovery_holds_until_deadline():
     state = empty_recovery()
     state["active_until"] = (datetime.now(UTC) + timedelta(seconds=40)).isoformat()
     result, device, _ = control(
-        device_target=400, controller_target=41, recovery_state=state,
+        device_target=800, controller_target=41, recovery_state=state,
     )
     assert result[3] == "recovery_hold"
     device.set_output_power.assert_not_called()
@@ -143,14 +146,14 @@ def test_expired_recovery_requests_restoration_and_confirmation():
     state = empty_recovery()
     state["active_until"] = (datetime.now(UTC) - timedelta(seconds=10)).isoformat()
     result, device, state = control(
-        device_target=400, controller_target=41, recovery_state=state,
+        device_target=800, controller_target=41, recovery_state=state,
     )
     assert result[3] == "recovery_restore_sent"
-    assert state["restore_target_w"] == 130.0
+    assert state["restore_target_w"] == 120.0
     assert state["active_until"] is not None
-    device.set_output_power.assert_called_once_with(130.0)
+    device.set_output_power.assert_called_once_with(120.0)
     result, device, state = control(
-        device_target=130, controller_target=41, recovery_state=state,
+        device_target=120, controller_target=41, recovery_state=state,
     )
     assert result[3] == "recovery_restore_confirmed"
     assert state["active_until"] is None
@@ -248,6 +251,7 @@ def test_runtime_wires_cycle_without_hardware():
     fields = {"active_until": None}
     history = deque()
     oscillation_state = {"last_detected_at": None}
+    forecast_state = {"last_log_at": None}
     st = status()
     patches = [
         patch.object(runtime, "_collect_ha_inputs", return_value=({}, {})),
@@ -269,16 +273,18 @@ def test_runtime_wires_cycle_without_hardware():
         patch.object(runtime, "_publish_oscillation_monitor"),
         patch.object(runtime, "_publish_recovery_status"),
         patch.object(runtime, "_print_cycle_status"),
+        patch.object(runtime, "update_forecast_logging"),
     ]
     from contextlib import ExitStack
     with ExitStack() as stack:
         mocks = [stack.enter_context(p) for p in patches]
         returned = runtime._run_cycle(
             cfg, ha, device, 130, 0.0, history,
-            oscillation_state, fields,
+            oscillation_state, fields, forecast_state,
         )
         assert returned == (130, 123.0)
         mocks[9].assert_called_once()
         mocks[12].assert_called_once()
         mocks[13].assert_called_once()
+        mocks[-1].assert_called_once_with(ha, cfg, st.battery_state, forecast_state)
         assert oscillation_state["recovery_trigger_ready"] is False

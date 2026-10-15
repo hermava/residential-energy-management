@@ -8,6 +8,7 @@ from energy_manager.battery_control import _apply_marstek_control, _get_marstek_
 from energy_manager.controller import calculate_battery_output_target
 from energy_manager.csv_logging import _append_marstek_log
 from energy_manager.estimation import estimate_load
+from energy_manager.forecast.forecast_data import update_forecast_logging
 from energy_manager.ha_reporting import (
     _collect_ha_inputs,
     _get_quality_diagnostics,
@@ -41,6 +42,7 @@ def _run_cycle(
     oscillation_history: deque,
     oscillation_state: dict,
     recovery_state: dict,
+    forecast_state: dict,
 ) -> tuple[float | None, float | None]:
     measurements, entity_states = _collect_ha_inputs(config, ha)
     load_estimate = estimate_load(
@@ -62,7 +64,6 @@ def _run_cycle(
         battery_state=battery_state,
         battery_config=config.battery,
     )
-
     (
         last_command_w,
         last_command_time,
@@ -75,7 +76,6 @@ def _run_cycle(
         last_command_w, last_command_time,
         recovery_state, oscillation_state.get("recovery_trigger_ready", False),
     )
-
     oscillation_assessment = _update_oscillation_monitor(
         status=marstek_status,
         command_sent=command_sent,
@@ -84,7 +84,6 @@ def _run_cycle(
         history=oscillation_history,
         monitor_state=oscillation_state,
     )
-
     # Request recovery only on a fresh oscillation assessment, not the
     # 60-second hysteresis in the public binary sensor.
     # Keep the HA detection visible even with variable solar input, but do
@@ -131,5 +130,9 @@ def _run_cycle(
         _publish_recovery_status(ha, recovery_info)
     except requests.RequestException as exc:
         print(f"Recovery monitor publish failed: {exc}")
+    try:
+        update_forecast_logging(ha, config, battery_state, forecast_state)
+    except (OSError, ValueError, requests.RequestException) as exc:
+        print(f"Forecast logging failed: {exc}")
 
     return last_command_w, last_command_time

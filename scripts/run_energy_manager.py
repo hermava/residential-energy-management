@@ -43,6 +43,7 @@ def main() -> None:
     oscillation_history = deque()
     oscillation_state = {"last_detected_at": None}
     recovery_state = _read_recovery_state()
+    forecast_state = {"last_log_at": None}
 
     # systemctl stop sends SIGTERM; use the existing shutdown path to attempt
     # restoration before the service exits.
@@ -63,6 +64,7 @@ def main() -> None:
                     oscillation_history=oscillation_history,
                     oscillation_state=oscillation_state,
                     recovery_state=recovery_state,
+                    forecast_state=forecast_state,
                 )
             except requests.RequestException as exc:
                 print(f"Home Assistant communication failed: {exc}")

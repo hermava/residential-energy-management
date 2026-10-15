@@ -38,3 +38,27 @@ battery:
   max_output_power_w: 800
   max_age_seconds: 120
   control_inhibit_soc_percent: 95
+
+forecast_sources:
+  solar:
+    provider: forecast_solar
+    next_hour:
+      entity_id: sensor.energy_next_hour
+      unit: kWh
+    today_remaining:
+      entity_id: sensor.energy_production_today_remaining
+      unit: kWh
+    tomorrow:
+      entity_id: sensor.energy_production_tomorrow
+      unit: kWh
+
+  weather:
+    provider: openweathermap
+    condition:
+      entity_id: sensor.openweathermap_condition
+    cloud_coverage:
+      entity_id: sensor.openweathermap_cloud_coverage
+      unit: "%"
+    temperature:
+      entity_id: sensor.openweathermap_temperature
+      unit: "°C"

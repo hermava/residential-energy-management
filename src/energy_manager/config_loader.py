@@ -6,6 +6,8 @@ from energy_manager.models import (
     BatteryConfig,
     ConstantConsumerConfig,
     EstimatedConsumerConfig,
+    ForecastSensorConfig,
+    ForecastSourceConfig,
     LoadConfig,
     OutputConfig,
     PowerChannelType,
@@ -23,6 +25,7 @@ def load_config(path: Path) -> LoadConfig:
         constant_consumers=_parse_constant_consumers(data),
         outputs=_parse_outputs(data),
         battery=_parse_battery(data),
+        forecast_sources=_parse_forecast_sources(data),
     )
 
 def _parse_power_sensors(
@@ -92,3 +95,17 @@ def _parse_battery(data: dict) -> BatteryConfig:
         max_age_seconds=battery_data["max_age_seconds"],
         control_inhibit_soc_percent=float(battery_data["control_inhibit_soc_percent"]),
     )
+
+def _parse_forecast_sources(data: dict) -> dict[str, ForecastSourceConfig]:
+    configs = {}
+    for source_name, source_data in data.get("forecast_sources", {}).items():
+        values = {}
+        for name, value_data in source_data.items():
+            if name == "provider":
+                continue
+            values[name] = ForecastSensorConfig(
+                entity_id=value_data["entity_id"],
+                unit=value_data.get("unit"),
+            )
+        configs[source_name] = ForecastSourceConfig(provider=source_data["provider"], values=values)
+    return configs

@@ -1,5 +1,5 @@
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
@@ -146,12 +146,32 @@ class BatteryConfig:
             raise ValueError("control_inhibit_soc_percent must be between 0 and 100")
 
 @dataclass(frozen=True)
+class ForecastSensorConfig:
+    entity_id: str
+    unit: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.entity_id.strip():
+            raise ValueError("entity_id must not be empty")
+
+
+@dataclass(frozen=True)
+class ForecastSourceConfig:
+    provider: str
+    values: dict[str, ForecastSensorConfig]
+
+    def __post_init__(self) -> None:
+        if not self.provider.strip():
+            raise ValueError("provider must not be empty")
+
+@dataclass(frozen=True)
 class LoadConfig:
     power_sensors: dict[str, PowerSensorConfig]
     estimated_consumers: dict[str, EstimatedConsumerConfig]
     constant_consumers: dict[str, ConstantConsumerConfig]
     outputs: dict[str, OutputConfig]
     battery: BatteryConfig
+    forecast_sources: dict[str, ForecastSourceConfig] = field(default_factory=dict)
 
 @dataclass(frozen=True)
 class LoadEstimate:

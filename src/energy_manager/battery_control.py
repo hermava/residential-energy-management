@@ -81,11 +81,16 @@ def _handle_active_recovery(
     restore_sent_at = recovery_state["restore_sent_at"]
     retry_allowed = restore_sent_at is None
     if restore_sent_at is not None:
-        retry_allowed = (wall_now - datetime.fromisoformat(restore_sent_at)).total_seconds() >= RECOVERY_RETRY_SECONDS
+        retry_allowed = (
+            (wall_now - datetime.fromisoformat(restore_sent_at)).total_seconds()
+            >= RECOVERY_RETRY_SECONDS
+        )
     if not retry_allowed:
         return last_command_w, last_command_time, False, "recovery_awaiting_confirmation"
     command_target_w = max(MIN_TEST_COMMAND_POWER_W, float(round(target_power_w)))
-    command_reason = "recovery_interrupted_by_load" if interrupted_by_load else "recovery_restore_sent"
+    command_reason = (
+        "recovery_interrupted_by_load" if interrupted_by_load else "recovery_restore_sent"
+    )
     recovery_state["restore_target_w"] = command_target_w
     recovery_state["restore_sent_at"] = wall_now.isoformat()
     recovery_state["last_event"] = command_reason
@@ -117,7 +122,9 @@ def _can_start_recovery(
     last_attempt_at = recovery_state["last_attempt_at"]
     if last_attempt_at is None:
         return True
-    seconds_since_last_attempt = (wall_now - datetime.fromisoformat(last_attempt_at)).total_seconds()
+    seconds_since_last_attempt = (
+        wall_now - datetime.fromisoformat(last_attempt_at)
+    ).total_seconds()
     return seconds_since_last_attempt >= RECOVERY_COOLDOWN_SECONDS
 
 
