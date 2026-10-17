@@ -1,10 +1,27 @@
 # Residential Energy Management
 
+[![CI](https://github.com/HERMAVA/residential-energy-management/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HERMAVA/residential-energy-management/actions/workflows/ci.yml)
+
 Python-based energy manager for a residential setup with Home Assistant and a MARSTEK battery storage system.
 
-The application estimates the current household load, calculates a battery output target and controls the MARSTEK battery via MQTT.
+It reads household and battery measurements, estimates the current load, and calculates a battery output target. Home Assistant provides sensor data and status reporting; the MARSTEK adapter handles battery communication over MQTT.
 
-It also provides an advisory energy forecast to help use surplus PV energy locally instead of exporting it without compensation. The forecast does not change battery control or switch appliances.
+The project also provides an advisory forecast of the remaining daily energy balance. Forecasts do not issue battery commands or switch appliances; battery control and recovery are separate active functions.
+
+```mermaid
+flowchart LR
+  HA[Home Assistant sensors] --> ADAPTER[Input adapter]
+  MQTT[MARSTEK status] --> ADAPTER
+  ADAPTER --> VALIDATION[Measurement validation]
+  VALIDATION --> LOAD[Load estimation]
+  LOAD --> CONTROL[Battery controller]
+  CONTROL --> BATTERY[MARSTEK via MQTT]
+  ADAPTER --> FORECAST[Advisory energy forecast]
+  FORECAST --> REPORT[Home Assistant status and CSV logs]
+  CONTROL --> REPORT
+```
+
+CI runs Ruff, the full test suite, and a Python compile check on pushes and pull requests. See [Development Workflow](#development-workflow) for local validation commands.
 
 ## Features
 
