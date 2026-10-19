@@ -289,6 +289,7 @@ def test_runtime_wires_cycle_without_hardware(correction_error, daily_error, for
         patch.object(runtime, "update_daily_energy", daily_update),
         patch.object(runtime, "_publish_daily_energy", daily_publish),
         patch.object(runtime, "update_daily_forecast", daily_forecast),
+        patch.object(runtime, "update_brightsky_forecast_collection"),
         patch.object(runtime, "_print_cycle_status"),
         patch.object(runtime, "update_forecast_logging"),
         patch.object(runtime, "update_input_history", forecast_update),

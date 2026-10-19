@@ -2,7 +2,7 @@ from dataclasses import replace
 
 import pytest
 
-from energy_manager.forecast.energy_forecast import forecast_daily_energy
+from energy_manager.forecast.forecast import forecast_daily_energy
 from energy_manager.models import EnergyForecastConfig
 
 

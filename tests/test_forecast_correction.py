@@ -6,13 +6,13 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from energy_manager.forecast.correction import (
+from energy_manager.forecast.forecast import (
     CORRECTION_METHODS,
     CorrectionResult,
+    InputPowerHistory,
     calculate_correction,
 )
-from energy_manager.forecast.energy_forecast import InputPowerHistory
-from energy_manager.forecast.forecast_data import (
+from energy_manager.forecast.forecast_data_collection import (
     update_forecast_correction,
     update_forecast_logging,
 )
@@ -91,33 +91,29 @@ def config(unit="W"):
     )
 
 
-@pytest.mark.parametrize("samples,corrected", [(1, ""), (10, "1000.0")])
-def test_paired_history_full_battery_and_separate_csv(tmp_path, samples, corrected):
+@pytest.mark.parametrize("samples", [1, 10])
+def test_paired_history_full_battery_and_single_snapshot_csv(tmp_path, samples):
     now = datetime.now(UTC)
     battery = BatteryState(100, 200, 130, now, now)
     ha = Mock()
     ha.get_entity_state.return_value = EntityState("test", "400", now, now)
     state = {}
-    with patch("energy_manager.forecast.forecast_data.time.monotonic") as clock:
+    with patch("energy_manager.forecast.forecast_data_collection.time.monotonic") as clock:
         for i in range(samples):
             clock.return_value = i * 10
             update_forecast_correction(ha, config(), battery, state)
         assert state["correction"].factor == (0.5 if samples == 10 else None)
         ha.get_entity_state.return_value = EntityState("test", "2", now, now)
-        with (
-            patch("energy_manager.forecast.forecast_data.FORECAST_LOG_PATH",
-                  tmp_path / "original.csv"),
-            patch("energy_manager.forecast.forecast_data.FORECAST_CORRECTION_LOG_PATH",
-                  tmp_path / "correction.csv"),
+        with patch(
+            "energy_manager.forecast.forecast_data_collection.FORECAST_LOG_PATH",
+            tmp_path / "original.csv",
         ):
             update_forecast_logging(ha, config(), battery, state)
-    path = next(tmp_path.glob("correction_*.csv"))
+    path = next(tmp_path.glob("original_*.csv"))
     with path.open() as file:
         row = next(csv.DictReader(file))
     assert float(row["solar_today_remaining_wh"]) == 2000
-    assert row["corrected_today_remaining_wh"] == corrected
-    assert row["method"] == "ratio_of_means_v1"
-    assert len(list(tmp_path.glob("original_*.csv"))) == 1
+    assert len(list(tmp_path.glob("*.csv"))) == 1
 
 
 def test_optional_power_source_does_not_require_ha_access():

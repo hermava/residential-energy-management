@@ -11,7 +11,7 @@ from energy_manager.exceptions import (
     InvalidMeasurementError,
     MeasurementUnavailableError,
 )
-from energy_manager.forecast.energy_forecast import DailyEnergyForecast
+from energy_manager.forecast.forecast import DailyEnergyForecast
 from energy_manager.models import (
     PowerChannelType,
     PowerContributionStatus,

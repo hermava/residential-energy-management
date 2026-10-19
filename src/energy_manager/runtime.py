@@ -9,8 +9,9 @@ from energy_manager.controller import calculate_battery_output_target
 from energy_manager.csv_logging import _append_marstek_log
 from energy_manager.daily_energy import update_daily_energy
 from energy_manager.estimation import estimate_load
-from energy_manager.forecast.daily_forecast import update_daily_forecast
-from energy_manager.forecast.forecast_data import (
+from energy_manager.forecast.forecast_data_collection import (
+    update_brightsky_forecast_collection,
+    update_daily_forecast,
     update_forecast_correction,
     update_forecast_logging,
     update_input_history,
@@ -161,5 +162,9 @@ def _run_cycle(
         update_daily_forecast(ha, config, battery_state, forecast_state)
     except (OSError, ValueError, requests.RequestException) as exc:
         print(f"Daily forecast failed: {exc}")
+    try:
+        update_brightsky_forecast_collection(forecast_state)
+    except Exception as exc:
+        print(f"Bright Sky forecast collection failed ({type(exc).__name__})")
 
     return last_command_w, last_command_time

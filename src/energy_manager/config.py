@@ -62,3 +62,23 @@ def get_marstek_device_mac() -> str:
     if not device_mac:
         raise RuntimeError("MARSTEK_DEVICE_MAC is not configured")
     return device_mac
+
+
+def get_brightsky_forecast_settings() -> tuple[float, float, str, int] | None:
+    latitude = os.getenv("BRIGHTSKY_LATITUDE")
+    longitude = os.getenv("BRIGHTSKY_LONGITUDE")
+    timezone = os.getenv("BRIGHTSKY_TIMEZONE", "Europe/Berlin")
+    max_distance = os.getenv("BRIGHTSKY_MAX_DISTANCE_M", "50000")
+    if not latitude or not longitude:
+        return None
+    try:
+        latitude_value = float(latitude)
+        longitude_value = float(longitude)
+        max_distance_value = int(max_distance)
+    except ValueError as exc:
+        raise RuntimeError("Bright Sky location settings are invalid") from exc
+    if not -90 <= latitude_value <= 90 or not -180 <= longitude_value <= 180:
+        raise RuntimeError("Bright Sky coordinates are outside valid ranges")
+    if max_distance_value < 0:
+        raise RuntimeError("BRIGHTSKY_MAX_DISTANCE_M must not be negative")
+    return latitude_value, longitude_value, timezone, max_distance_value

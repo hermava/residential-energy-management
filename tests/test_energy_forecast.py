@@ -3,8 +3,8 @@ from unittest.mock import patch
 
 import pytest
 
-from energy_manager.forecast.energy_forecast import InputPowerHistory
-from energy_manager.forecast.forecast_data import update_input_history
+from energy_manager.forecast.forecast import InputPowerHistory
+from energy_manager.forecast.forecast_data_collection import update_input_history
 from energy_manager.models import BatteryState
 
 
@@ -76,7 +76,7 @@ def test_adapter_filters_stale_and_future_measurements(age, expected_count):
     measured_at = now - timedelta(seconds=age)
     battery = BatteryState(40, 800, 130, measured_at, measured_at)
     state = {}
-    with patch("energy_manager.forecast.forecast_data.datetime") as clock:
+    with patch("energy_manager.forecast.forecast_data_collection.datetime") as clock:
         clock.now.return_value = now
         update_input_history(battery, state, 120)
     assert state["input_statistics"].sample_count == expected_count
@@ -86,7 +86,10 @@ def test_history_updates_independently_of_csv_interval_and_survives_missing_inpu
     now = datetime.now(UTC)
     battery = BatteryState(40, 800, 130, now, now)
     state = {"last_log_at": 0}
-    with patch("energy_manager.forecast.forecast_data.time.monotonic", side_effect=[0, 10, 611]):
+    with patch(
+        "energy_manager.forecast.forecast_data_collection.time.monotonic",
+        side_effect=[0, 10, 611],
+    ):
         update_input_history(battery, state, 120)
         update_input_history(battery, state, 120)
         assert state["input_statistics"].sample_count == 2

@@ -51,6 +51,10 @@ python3 -m venv .venv
 
 For a new installation, copy [config/sensors.example.yaml](config/sensors.example.yaml) to `config/sensors.yaml` and adapt it to your devices. Keep an existing local configuration when updating. Store credentials in `.env`; local configuration, credentials and runtime data are excluded from Git.
 
+Create `.env` from `.env.example` for a new installation, then enter credentials
+and private Bright Sky coordinates in the local `.env` file. Keep an existing
+`.env` when updating; it is intentionally ignored by Git.
+
 ## Project Structure
 
 ```text
@@ -73,10 +77,9 @@ src/energy_manager/
   settings.py                Runtime and control parameters
   adapters/                  Home Assistant and MARSTEK interfaces
   forecast/
-    forecast_data.py          Source normalization, input history and CSV logging
-    correction.py             Versioned PV forecast correction strategies
-    energy_forecast.py        Provider-independent statistics and energy balance
-    daily_forecast.py         Daily forecast orchestration and HA reporting
+    forecast_input.py          Provider inputs and normalized forecast snapshots
+    forecast_data_collection.py Forecast history, CSV logging and collection cycle
+    forecast.py                Forecast calculations, statistics and temporary correction
 
 config/
   sensors.example.yaml       Configuration template
@@ -103,7 +106,14 @@ MQTT_PASSWORD=...
 
 MARSTEK_DEVICE_TYPE=...
 MARSTEK_DEVICE_MAC=...
+
+# Bright Sky forecast location; keep real coordinates only in local .env
+BRIGHTSKY_LATITUDE=...
+BRIGHTSKY_LONGITUDE=...
+BRIGHTSKY_TIMEZONE=Europe/Berlin
+BRIGHTSKY_MAX_DISTANCE_M=50000
 ```
+
 
 Sensor configuration is located in:
 
@@ -120,6 +130,12 @@ The example configuration includes:
 - `forecast_correction` and `energy_forecast` for the advisory model.
 
 Forecast calculations use Wh and W internally. Configure source units explicitly, for example `kWh` for energy and `W` for power.
+
+Bright Sky location settings are read from the local `.env`, not from
+`config/sensors.yaml`. Set `BRIGHTSKY_LATITUDE` and `BRIGHTSKY_LONGITUDE` there;
+the optional timezone defaults to `Europe/Berlin`, and the station search radius
+defaults to 50,000 m. Real coordinates must not be committed or copied into
+`.env.example`.
 
 Control and monitoring parameters are located in:
 
@@ -204,7 +220,7 @@ Configure the strategy under `forecast_correction`:
 
 | Parameter | Default | Meaning |
 | --- | --- | --- |
-| `method` | `ratio_of_means_v1` | Strategy selected from `CORRECTION_METHODS` in `forecast/correction.py` |
+| `method` | `ratio_of_means_v1` | Temporary strategy selected from `CORRECTION_METHODS` in `forecast/forecast.py` |
 | `min_forecast_power_w` | 50 | Minimum mean forecast power for division |
 | `min_factor` / `max_factor` | 0.25 / 4 | Bounds applied to the raw ratio |
 | `max_age_seconds` | 1800 | Freshness limit for forecast power readings and the latest paired samples |
@@ -229,12 +245,19 @@ Missing, invalid or stale readings and intervals longer than 30 seconds are not 
 | Daily file in `data/` | Contents |
 | --- | --- |
 | `energy_forecast_history_YYYY-MM-DD.csv` | Battery, solar forecast and weather snapshots |
-| `energy_forecast_correction_YYYY-MM-DD.csv` | Paired means, correction factors, status and original/corrected remaining energy |
-| `energy_forecast_daily_v2_YYYY-MM-DD.csv` | Daily balance, assessment, reasons, input history diagnostics and model parameters |
+| `energy_forecast_daily_v2_YYYY-MM-DD.csv` | Daily balance, assessment, correction status/factor and paired input statistics |
+| `brightsky_forecast_YYYY-MM-DD.csv` | Hourly Bright Sky forecast records, archived with retrieval time and valid forecast time |
 
 Forecast CSV timestamps and filename dates use UTC; daily energy resets and sunset date checks use `Europe/Berlin`. Older `energy_forecast_daily_...` files may have the previous schema. Forecast logging normally runs every 60 seconds, subject to cycle duration and communication delays.
 
-For calibration, compare matching time intervals: a stored remaining-energy forecast must be compared with measured input energy **after that forecast timestamp**, not with the whole day's total. Keep original and corrected forecasts to evaluate whether correction improves accuracy.
+Bright Sky forecast collection is separate and runs hourly. It stores available
+hourly forecasts from the current time through the end of the day after tomorrow,
+including sunshine duration, solar irradiation and cloud cover. Retrieval and
+forecast timestamps are both retained so historical forecast snapshots can later
+be compared with measured battery input over the matching periods. Bright Sky
+values are source weather forecasts, not estimates of energy entering the battery.
+
+Correction status, factor and paired input statistics are stored with the daily assessment. For calibration, compare matching time intervals: a stored remaining-energy forecast must be compared with measured input energy **after that forecast timestamp**, not with the whole day's total. Keep original and corrected forecasts to evaluate whether correction improves accuracy.
 
 ## Run
 

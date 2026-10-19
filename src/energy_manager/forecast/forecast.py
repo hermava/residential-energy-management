@@ -1,11 +1,12 @@
-"""Provider-independent energy balances and monotonic input history."""
+"""Provider-independent forecast calculations and supporting statistics."""
 
 import math
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from statistics import fmean, pstdev
 
-from energy_manager.models import EnergyForecastConfig
+from energy_manager.models import EnergyForecastConfig, ForecastCorrectionConfig
 
 
 @dataclass(frozen=True)
@@ -31,13 +32,7 @@ def forecast_daily_energy(
     capacity_wh: float, config: EnergyForecastConfig, correction_factor: float | None = None,
     input_mean_w: float | None = None,
 ) -> DailyEnergyForecast:
-    """Heuristic aggregate balance, not a SOC trajectory or a probability.
-
-    horizon_hours is the remaining time until today's sunset; remaining_pv_wh
-    must cover that same interval. The adapter validates the sunset's local date.
-    Defaults explicitly assume no losses. Charging limits and the time distribution
-    of PV are unknown; surplus_energy_wh is a balance surplus, not predicted export.
-    """
+    """Estimate an aggregate balance through today's sunset, not an SOC trajectory."""
     if not math.isfinite(capacity_wh) or capacity_wh <= 0:
         raise ValueError("capacity_wh must be finite and positive")
     values = (soc_percent, remaining_pv_wh, horizon_hours)
@@ -140,3 +135,45 @@ class InputPowerHistory:
             latest_age_seconds=now - self._samples[-1][0] if values else None,
             has_minimum_samples=len(values) >= self.min_samples,
         )
+
+
+@dataclass(frozen=True)
+class CorrectionResult:
+    method: str
+    status: str
+    raw_factor: float | None = None
+    factor: float | None = None
+
+
+def ratio_of_means_v1(
+    actual: InputPowerStatistics,
+    predicted: InputPowerStatistics,
+    config: ForecastCorrectionConfig,
+) -> CorrectionResult:
+    if not actual.has_minimum_samples or not predicted.has_minimum_samples:
+        return CorrectionResult(config.method, "insufficient_samples")
+    ages = (actual.latest_age_seconds, predicted.latest_age_seconds)
+    if any(age is None or age > config.max_age_seconds for age in ages):
+        return CorrectionResult(config.method, "stale_history")
+    if actual.mean_w is None or predicted.mean_w is None:
+        return CorrectionResult(config.method, "missing_data")
+    if predicted.mean_w < config.min_forecast_power_w:
+        return CorrectionResult(config.method, "low_forecast_power")
+    raw_factor = actual.mean_w / predicted.mean_w
+    factor = min(config.max_factor, max(config.min_factor, raw_factor))
+    status = "clamped" if factor != raw_factor else "available"
+    return CorrectionResult(config.method, status, raw_factor, factor)
+
+
+CorrectionMethod = Callable[
+    [InputPowerStatistics, InputPowerStatistics, ForecastCorrectionConfig], CorrectionResult
+]
+CORRECTION_METHODS: dict[str, CorrectionMethod] = {"ratio_of_means_v1": ratio_of_means_v1}
+
+
+def calculate_correction(
+    actual: InputPowerStatistics,
+    predicted: InputPowerStatistics,
+    config: ForecastCorrectionConfig,
+) -> CorrectionResult:
+    return CORRECTION_METHODS[config.method](actual, predicted, config)

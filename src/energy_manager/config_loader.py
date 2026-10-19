@@ -2,7 +2,7 @@ from pathlib import Path
 
 import yaml
 
-from energy_manager.forecast.correction import CORRECTION_METHODS
+from energy_manager.forecast.forecast import CORRECTION_METHODS
 from energy_manager.models import (
     BatteryConfig,
     ConstantConsumerConfig,

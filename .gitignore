@@ -28,3 +28,4 @@ config/sensors.yaml
 # Local project instructions and context
 /AGENTS.md
 /docs/project-context.md
+/docs/ideas.txt

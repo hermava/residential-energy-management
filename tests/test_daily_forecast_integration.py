@@ -7,9 +7,9 @@ import pytest
 import requests
 
 from energy_manager.exceptions import EntityUnavailableError
-from energy_manager.forecast import daily_forecast, forecast_data
-from energy_manager.forecast.correction import CorrectionResult
-from energy_manager.forecast.energy_forecast import InputPowerHistory
+from energy_manager.forecast import forecast_data_collection as daily_forecast
+from energy_manager.forecast import forecast_input
+from energy_manager.forecast.forecast import CorrectionResult, InputPowerHistory
 from energy_manager.models import (
     BatteryConfig,
     BatteryState,
@@ -29,7 +29,7 @@ def setup_forecast(monkeypatch, tmp_path):
         def now(cls, tz=None):
             return now.astimezone(tz) if tz else now.replace(tzinfo=None)
     monkeypatch.setattr(daily_forecast, "datetime", Clock)
-    monkeypatch.setattr(forecast_data, "datetime", Clock)
+    monkeypatch.setattr(forecast_input, "datetime", Clock)
     monkeypatch.setattr(daily_forecast, "FORECAST_DAILY_LOG_PATH", tmp_path / "forecast.csv")
     monkeypatch.setattr(daily_forecast.time, "monotonic", lambda: 0)
     config = LoadConfig(
