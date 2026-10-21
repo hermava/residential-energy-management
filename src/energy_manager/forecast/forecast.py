@@ -177,3 +177,83 @@ def calculate_correction(
     config: ForecastCorrectionConfig,
 ) -> CorrectionResult:
     return CORRECTION_METHODS[config.method](actual, predicted, config)
+
+
+@dataclass(frozen=True)
+class DailyBatteryInputForecast:
+    assessment: str
+    data_quality: str
+    reason: str
+    solar_irradiation_j_m2: float | None
+    available_hours: int
+    expected_hours: int
+    estimated_battery_input_wh: float | None
+    battery_capacity_wh: float = 2240.0
+    model: str = "brightsky_irradiation_linear_v1"
+
+
+def estimate_daily_battery_input_from_irradiation(
+    solar_irradiation_j_m2: float | None, available_hours: int, expected_hours: int,
+    battery_capacity_wh: float = 2240.0,
+) -> DailyBatteryInputForecast:
+    if not math.isfinite(battery_capacity_wh) or battery_capacity_wh <= 0:
+        raise ValueError("battery_capacity_wh must be finite and positive")
+    if solar_irradiation_j_m2 is None or not math.isfinite(solar_irradiation_j_m2):
+        return DailyBatteryInputForecast(
+            "unavailable", "unavailable", "missing_or_invalid_irradiation",
+            solar_irradiation_j_m2, available_hours, expected_hours, None, battery_capacity_wh,
+        )
+    if solar_irradiation_j_m2 < 0 or expected_hours <= 0 or available_hours != expected_hours:
+        return DailyBatteryInputForecast(
+            "unavailable", "unavailable", "incomplete_or_invalid_day",
+            solar_irradiation_j_m2, available_hours, expected_hours, None, battery_capacity_wh,
+        )
+    estimated_input_wh = estimate_battery_input_wh_from_irradiation(solar_irradiation_j_m2)
+    assessment = "green" if estimated_input_wh > battery_capacity_wh else (
+        "yellow" if estimated_input_wh > battery_capacity_wh * 0.5 else "red"
+    )
+    return DailyBatteryInputForecast(
+        assessment, "low", "five_day_historical_fit", solar_irradiation_j_m2,
+        available_hours, expected_hours, estimated_input_wh, battery_capacity_wh,
+    )
+
+
+def estimate_battery_input_wh_from_irradiation(solar_irradiation_j_m2: float) -> float:
+    if not math.isfinite(solar_irradiation_j_m2) or solar_irradiation_j_m2 < 0:
+        raise ValueError("solar_irradiation_j_m2 must be finite and nonnegative")
+    irradiation_kwh_m2 = solar_irradiation_j_m2 / 3_600_000
+    return max(0.0, (0.0404 + 0.8515 * irradiation_kwh_m2) * 1000)
+
+
+def estimate_battery_input_power_w_from_irradiation(solar_irradiation_j_m2: float) -> float:
+    if not math.isfinite(solar_irradiation_j_m2) or solar_irradiation_j_m2 < 0:
+        raise ValueError("solar_irradiation_j_m2 must be finite and nonnegative")
+    return max(0.0, 3.5967 + 0.0002405847 * solar_irradiation_j_m2)
+
+
+def estimate_interval_battery_input_wh(
+    intervals: list[tuple[float, float]], expected_seconds: float,
+) -> tuple[float | None, float, int]:
+    if not math.isfinite(expected_seconds) or expected_seconds <= 0:
+        raise ValueError("expected_seconds must be finite and positive")
+    ordered = sorted(intervals, key=lambda item: item[0])
+    cursor = 0.0
+    irradiation_j_m2 = 0.0
+    used = 0
+    for start_seconds, irradiation in ordered:
+        if not math.isfinite(start_seconds) or not math.isfinite(irradiation) or irradiation < 0:
+            continue
+        end_seconds = start_seconds + 3600
+        overlap_start = max(0.0, start_seconds)
+        overlap_end = min(expected_seconds, end_seconds)
+        if overlap_end <= overlap_start:
+            continue
+        if overlap_start > cursor + 1:
+            return None, cursor, used
+        fraction = (overlap_end - overlap_start) / 3600
+        irradiation_j_m2 += irradiation * fraction
+        cursor = max(cursor, overlap_end)
+        used += 1
+        if cursor >= expected_seconds - 1:
+            return estimate_battery_input_wh_from_irradiation(irradiation_j_m2), cursor, used
+    return None, cursor, used

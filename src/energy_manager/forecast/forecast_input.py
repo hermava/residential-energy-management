@@ -179,7 +179,7 @@ def collect_brightsky_forecast(now: datetime | None = None) -> list[BrightSkyFor
         raise ValueError("now must be timezone-aware")
     local_now = retrieved_at.astimezone(zone)
     final_day = local_now.date() + timedelta(days=2)
-    last_date = datetime.combine(final_day, time(23, 59), zone)
+    last_date = datetime.combine(final_day + timedelta(days=1), time.min, zone)
     response = requests.get(
         BRIGHTSKY_WEATHER_URL,
         params={
@@ -211,7 +211,7 @@ def collect_brightsky_forecast(now: datetime | None = None) -> list[BrightSkyFor
         points.append(BrightSkyForecastPoint(
             retrieved_at=retrieved_at,
             forecast_at=forecast_at,
-            forecast_date=forecast_at.astimezone(zone).date().isoformat(),
+            forecast_date=(forecast_at - timedelta(hours=1)).astimezone(zone).date().isoformat(),
             source_id=source["id"],
             source_name=source.get("station_name"),
             sunshine_seconds=_optional_float(record.get("sunshine")),

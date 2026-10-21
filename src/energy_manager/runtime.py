@@ -1,4 +1,5 @@
 from collections import deque
+from datetime import UTC, datetime
 
 import requests
 
@@ -10,6 +11,7 @@ from energy_manager.csv_logging import _append_marstek_log
 from energy_manager.daily_energy import update_daily_energy
 from energy_manager.estimation import estimate_load
 from energy_manager.forecast.forecast_data_collection import (
+    record_completed_brightsky_comparison,
     update_brightsky_forecast_collection,
     update_daily_forecast,
     update_forecast_correction,
@@ -130,9 +132,17 @@ def _run_cycle(
         if any(name in config.outputs for name in (
             "battery_input_energy_today", "battery_output_energy_today",
         )):
+            previous_energy = forecast_state.get("daily_energy")
+            previous_day = previous_energy.day if previous_energy is not None else None
+            previous_input_wh = previous_energy.input_wh if previous_energy is not None else None
             energy = update_daily_energy(
                 battery_state, forecast_state, config.battery.max_age_seconds,
             )
+            if previous_day is not None and energy.day > previous_day:
+                record_completed_brightsky_comparison(
+                    datetime.now(UTC), previous_day, previous_input_wh, energy.complete,
+                    config.outputs, ha, forecast_state,
+                )
             _publish_daily_energy(config, ha, energy)
     except (OSError, ValueError, KeyError, TypeError, requests.RequestException) as exc:
         print(f"Daily energy reporting failed: {exc}")
@@ -159,12 +169,12 @@ def _run_cycle(
     except (OSError, ValueError, requests.RequestException) as exc:
         print(f"Forecast logging failed: {exc}")
     try:
+        update_brightsky_forecast_collection(forecast_state, config.battery.capacity_wh)
+    except Exception as exc:
+        print(f"Bright Sky forecast collection failed ({type(exc).__name__})")
+    try:
         update_daily_forecast(ha, config, battery_state, forecast_state)
     except (OSError, ValueError, requests.RequestException) as exc:
         print(f"Daily forecast failed: {exc}")
-    try:
-        update_brightsky_forecast_collection(forecast_state)
-    except Exception as exc:
-        print(f"Bright Sky forecast collection failed ({type(exc).__name__})")
 
     return last_command_w, last_command_time

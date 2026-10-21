@@ -2,8 +2,59 @@ from dataclasses import replace
 
 import pytest
 
-from energy_manager.forecast.forecast import forecast_daily_energy
+from energy_manager.forecast.forecast import (
+    estimate_battery_input_power_w_from_irradiation,
+    estimate_daily_battery_input_from_irradiation,
+    forecast_daily_energy,
+)
 from energy_manager.models import EnergyForecastConfig
+
+
+@pytest.mark.parametrize("irradiation_kwh_m2,assessment", [
+    (2.0, "red"), (2.3, "yellow"), (2.7, "green"),
+])
+def test_brightsky_irradiation_estimates_daily_battery_input(irradiation_kwh_m2, assessment):
+    result = estimate_daily_battery_input_from_irradiation(
+        irradiation_kwh_m2 * 3_600_000, 24, 24,
+    )
+    assert result.assessment == assessment
+    assert result.data_quality == "low"
+    assert result.estimated_battery_input_wh == pytest.approx(
+        (0.0404 + 0.8515 * irradiation_kwh_m2) * 1000,
+    )
+
+
+@pytest.mark.parametrize("estimated_wh,assessment", [
+    (1904, "red"), (1904.1, "yellow"), (2240, "yellow"), (2240.1, "green"),
+])
+def test_brightsky_assessment_uses_strict_capacity_boundaries(estimated_wh, assessment):
+    irradiation = ((estimated_wh / 1000 - 0.0404) / 0.8515) * 3_600_000
+    result = estimate_daily_battery_input_from_irradiation(irradiation, 24, 24, 2240)
+    assert result.assessment == assessment
+
+
+def test_brightsky_hourly_irradiation_estimates_power_in_watts():
+    result = estimate_battery_input_power_w_from_irradiation(1_000_000)
+    assert result == pytest.approx(244.1814)
+
+
+@pytest.mark.parametrize("irradiation", [-1, float("nan"), float("inf")])
+def test_invalid_hourly_irradiation_cannot_estimate_power(irradiation):
+    with pytest.raises(ValueError):
+        estimate_battery_input_power_w_from_irradiation(irradiation)
+
+
+@pytest.mark.parametrize("irradiation,hours,expected,reason", [
+    (None, 24, 24, "missing_or_invalid_irradiation"),
+    (float("nan"), 24, 24, "missing_or_invalid_irradiation"),
+    (-1, 24, 24, "incomplete_or_invalid_day"),
+    (3_600_000, 23, 24, "incomplete_or_invalid_day"),
+])
+def test_brightsky_irradiation_requires_complete_valid_day(irradiation, hours, expected, reason):
+    result = estimate_daily_battery_input_from_irradiation(irradiation, hours, expected)
+    assert result.assessment == "unavailable"
+    assert result.reason == reason
+    assert result.estimated_battery_input_wh is None
 
 
 def test_daily_balance_accounts_for_total_consumption_once():

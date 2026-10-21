@@ -197,7 +197,7 @@ energy_forecast:
 def test_sunset_source_and_forecast_output(tmp_path):
     path = _write_config(tmp_path, """
 outputs:
-  energy_forecast_today:
+  forecast_status_today:
     entity_id: sensor.custom_forecast
 forecast_sources:
   daylight:
@@ -208,4 +208,4 @@ forecast_sources:
     config = load_config(path)
     sunset = config.forecast_sources["daylight"].values["sunset"]
     assert sunset.entity_id == "sensor.sun_next_setting"
-    assert config.outputs["energy_forecast_today"].entity_id == "sensor.custom_forecast"
+    assert config.outputs["forecast_status_today"].entity_id == "sensor.custom_forecast"

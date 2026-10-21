@@ -147,14 +147,14 @@ Run commands from the repository root so relative configuration and data paths r
 
 ## Energy Forecast
 
-The current assessment covers **the rest of today until sunset**, using `sensor.sun_next_setting` as configured under `forecast_sources.daylight.sunset`. The timestamp must include a timezone. The application checks the calendar date in `Europe/Berlin`; tomorrow's sunset is not used to extend today's forecast.
+The current assessment covers **the rest of today until sunset**, using `sensor.sun_next_setting` as configured under `forecast_sources.daylight.sunset` and Bright Sky solar irradiation for that remaining interval. The timestamp must include a timezone. The application checks the calendar date in `Europe/Berlin`; tomorrow's sunset is not used to extend today's forecast. Forecast.Solar's remaining-energy value is logged only as a comparison and is no longer used by the calculation.
 
 The daily assessment is recalculated approximately every 60 seconds. Next-hour, tomorrow and weather values are collected for analysis, but do not yet have separate assessments. Weather values do not currently alter the balance calculation.
 
 ### Energy balance
 
 ```text
-effective_pv_wh = remaining_pv_wh × correction_factor
+effective_pv_wh = estimated_battery_input_from_brightsky_irradiation
 consumption_wh = consumption_w × hours_until_sunset / output_efficiency
 balance_energy_wh = capacity_wh × SOC / 100
                   + effective_pv_wh × input_efficiency
@@ -162,7 +162,7 @@ balance_energy_wh = capacity_wh × SOC / 100
 reserve_change_wh = effective_pv_wh × input_efficiency - consumption_wh
 ```
 
-If no usable correction factor exists, the original PV forecast is used and the correction status is reported separately.
+The historical Forecast.Solar correction factor is not applied to Bright Sky estimates. The factor and Forecast.Solar values remain logged for comparison only.
 
 The default **130 W represents total future household consumption**. The current battery output is not added to it. Battery input means PV power arriving at the MARSTEK, including power passed through when the battery is full; it is not net charging power.
 
@@ -172,7 +172,7 @@ This is a heuristic balance, not a time-resolved SOC prediction. It does not mod
 
 ### Assessment states
 
-The assessment is the **state** of `sensor.residential_energy_forecast_today`, configurable through `outputs.energy_forecast_today`. It is also included in the attributes.
+The assessment is the **state** of `sensor.residential_energy_forecast_today`, configurable through `outputs.forecast_status_today`. It is also included in the attributes.
 
 | State | Suggested color | Default rule |
 | --- | --- | --- |
@@ -245,7 +245,8 @@ Missing, invalid or stale readings and intervals longer than 30 seconds are not 
 | Daily file in `data/` | Contents |
 | --- | --- |
 | `energy_forecast_history_YYYY-MM-DD.csv` | Battery, solar forecast and weather snapshots |
-| `energy_forecast_daily_v2_YYYY-MM-DD.csv` | Daily balance, assessment, correction status/factor and paired input statistics |
+| `energy_forecast_daily_v2_YYYY-MM-DD.csv` | Earlier daily balance schema |
+| `energy_forecast_daily_v3_YYYY-MM-DD.csv` | Daily balance, correction statistics and Bright Sky battery-input forecasts |
 | `brightsky_forecast_YYYY-MM-DD.csv` | Hourly Bright Sky forecast records, archived with retrieval time and valid forecast time |
 
 Forecast CSV timestamps and filename dates use UTC; daily energy resets and sunset date checks use `Europe/Berlin`. Older `energy_forecast_daily_...` files may have the previous schema. Forecast logging normally runs every 60 seconds, subject to cycle duration and communication delays.
@@ -256,6 +257,24 @@ including sunshine duration, solar irradiation and cloud cover. Retrieval and
 forecast timestamps are both retained so historical forecast snapshots can later
 be compared with measured battery input over the matching periods. Bright Sky
 values are source weather forecasts, not estimates of energy entering the battery.
+
+The initial estimate uses the historical fit
+`battery input kWh = 0.0404 + 0.8515 × solar irradiation kWh/m²`. It was fitted
+to five complete October 2026 days (daily Pearson correlation about 0.94), so its
+quality is marked `low` until more days are collected. For all forecast days,
+red is at or below 85% of battery capacity, yellow is above 85% and at or below
+100%, and green is above battery capacity. Tomorrow and day-after-tomorrow do not
+use current SOC; today's established SOC balance is retained, with Bright Sky
+replacing Forecast.Solar as its PV-input estimate.
+Optional Home Assistant status outputs are `forecast_status_tomorrow` and
+`forecast_status_day_after_tomorrow`.
+
+Additional outputs expose `battery_input_forecast_now_w` for the Bright Sky
+hour containing the current time, `battery_input_forecast_tomorrow_kwh`, and
+`battery_input_forecast_tomorrow_error_kwh`. The daily prediction is the latest
+available estimate before local midnight. After that local day closes, its
+signed error is calculated as actual battery input minus forecast and persisted
+in `data/brightsky_forecast_state.json` with the measured-coverage flag.
 
 Correction status, factor and paired input statistics are stored with the daily assessment. For calibration, compare matching time intervals: a stored remaining-energy forecast must be compared with measured input energy **after that forecast timestamp**, not with the whole day's total. Keep original and corrected forecasts to evaluate whether correction improves accuracy.
 

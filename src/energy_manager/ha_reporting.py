@@ -239,7 +239,7 @@ def _publish_daily_energy(config, ha: HomeAssistantAdapter, energy: DailyEnergy)
 def _publish_energy_forecast(
     config, ha: HomeAssistantAdapter, forecast: DailyEnergyForecast, context: dict,
 ) -> None:
-    output = config.outputs.get("energy_forecast_today")
+    output = config.outputs.get("forecast_status_today")
     if output is None:
         return
     ha.publish_state(

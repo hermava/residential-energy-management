@@ -17,8 +17,23 @@ constant_consumers:
     estimated_power_w: 50
 
 outputs:
-  energy_forecast_today:
+  forecast_status_today:
     entity_id: sensor.residential_energy_forecast_today
+
+  forecast_status_tomorrow:
+    entity_id: sensor.residential_energy_forecast_tomorrow
+
+  forecast_status_day_after_tomorrow:
+    entity_id: sensor.residential_energy_forecast_day_after_tomorrow
+
+  battery_input_forecast_tomorrow_kwh:
+    entity_id: sensor.residential_energy_forecast_tomorrow_kwh
+
+  battery_input_forecast_tomorrow_error_kwh:
+    entity_id: sensor.residential_energy_forecast_tomorrow_error_kwh
+
+  battery_input_forecast_now_w:
+    entity_id: sensor.residential_power_forecast_now
 
   battery_input_energy_today:
     entity_id: sensor.residential_battery_input_energy_today
