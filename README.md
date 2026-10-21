@@ -44,6 +44,12 @@ CI runs Ruff, the full test suite, and a Python compile check on pushes and pull
 
 Requires Python 3.11 or later, Home Assistant, and an accessible MARSTEK MQTT adapter.
 
+### Tested Hardware
+
+The MARSTEK battery integration has so far been tested only with a **MARSTEK
+B2500 running firmware V116.6**. Other battery models and firmware versions have
+not yet been tested; compatibility with them is not guaranteed.
+
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e '.[dev]'
@@ -261,11 +267,11 @@ values are source weather forecasts, not estimates of energy entering the batter
 The initial estimate uses the historical fit
 `battery input kWh = 0.0404 + 0.8515 × solar irradiation kWh/m²`. It was fitted
 to five complete October 2026 days (daily Pearson correlation about 0.94), so its
-quality is marked `low` until more days are collected. For all forecast days,
-red is at or below 85% of battery capacity, yellow is above 85% and at or below
-100%, and green is above battery capacity. Tomorrow and day-after-tomorrow do not
-use current SOC; today's established SOC balance is retained, with Bright Sky
-replacing Forecast.Solar as its PV-input estimate.
+quality is marked `low` until more days are collected. For Bright Sky daily
+battery-input assessments, red is at or below 50% of battery capacity, yellow is
+above 50% and at or below 100%, and green is above battery capacity. Tomorrow and
+day-after-tomorrow do not use current SOC; today's established SOC balance is
+retained, with Bright Sky replacing Forecast.Solar as its PV-input estimate.
 Optional Home Assistant status outputs are `forecast_status_tomorrow` and
 `forecast_status_day_after_tomorrow`.
 

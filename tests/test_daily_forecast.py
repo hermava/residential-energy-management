@@ -11,7 +11,7 @@ from energy_manager.models import EnergyForecastConfig
 
 
 @pytest.mark.parametrize("irradiation_kwh_m2,assessment", [
-    (2.0, "red"), (2.3, "yellow"), (2.7, "green"),
+    (1.0, "red"), (2.0, "yellow"), (2.3, "yellow"), (2.7, "green"),
 ])
 def test_brightsky_irradiation_estimates_daily_battery_input(irradiation_kwh_m2, assessment):
     result = estimate_daily_battery_input_from_irradiation(
@@ -25,9 +25,9 @@ def test_brightsky_irradiation_estimates_daily_battery_input(irradiation_kwh_m2,
 
 
 @pytest.mark.parametrize("estimated_wh,assessment", [
-    (1904, "red"), (1904.1, "yellow"), (2240, "yellow"), (2240.1, "green"),
+    (1119, "red"), (1121, "yellow"), (2239, "yellow"), (2241, "green"),
 ])
-def test_brightsky_assessment_uses_strict_capacity_boundaries(estimated_wh, assessment):
+def test_brightsky_assessment_uses_expected_capacity_thresholds(estimated_wh, assessment):
     irradiation = ((estimated_wh / 1000 - 0.0404) / 0.8515) * 3_600_000
     result = estimate_daily_battery_input_from_irradiation(irradiation, 24, 24, 2240)
     assert result.assessment == assessment
