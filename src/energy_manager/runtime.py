@@ -14,7 +14,6 @@ from energy_manager.forecast.forecast_data_collection import (
     record_completed_brightsky_comparison,
     update_brightsky_forecast_collection,
     update_daily_forecast,
-    update_forecast_correction,
     update_forecast_logging,
     update_input_history,
 )
@@ -160,16 +159,16 @@ def _run_cycle(
         print(f"Recovery monitor publish failed: {exc}")
     try:
         update_input_history(battery_state, forecast_state, config.battery.max_age_seconds)
-        update_forecast_correction(ha, config, battery_state, forecast_state)
-    except (ValueError, requests.RequestException) as exc:
-        forecast_state.pop("correction", None)
-        print(f"Forecast correction failed: {exc}")
+    except ValueError as exc:
+        print(f"Forecast input history failed: {exc}")
     try:
         update_forecast_logging(ha, config, battery_state, forecast_state)
     except (OSError, ValueError, requests.RequestException) as exc:
         print(f"Forecast logging failed: {exc}")
     try:
-        update_brightsky_forecast_collection(forecast_state, config.battery.capacity_wh)
+        update_brightsky_forecast_collection(
+            forecast_state, config.battery.capacity_wh, config.solar_array,
+        )
     except Exception as exc:
         print(f"Bright Sky forecast collection failed ({type(exc).__name__})")
     try:

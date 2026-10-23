@@ -179,9 +179,6 @@ energy_forecast:
   surplus_target_soc_percent: 96
   reserve_soc_percent: 25
   input_history_max_age_seconds: 90
-  input_efficiency: 0.9
-  output_efficiency: 0.85
-  max_age_seconds: 1800
 """)
     config = load_config(path).energy_forecast
     assert config.consumption_w == 150
@@ -189,9 +186,6 @@ energy_forecast:
     assert config.surplus_target_soc_percent == 96
     assert config.reserve_soc_percent == 25
     assert config.input_history_max_age_seconds == 90
-    assert config.input_efficiency == 0.9
-    assert config.output_efficiency == 0.85
-    assert config.max_age_seconds == 1800
 
 
 def test_sunset_source_and_forecast_output(tmp_path):

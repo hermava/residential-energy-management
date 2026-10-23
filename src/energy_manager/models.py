@@ -164,6 +164,19 @@ class ForecastSourceConfig:
         if not self.provider.strip():
             raise ValueError("provider must not be empty")
 
+
+@dataclass(frozen=True)
+class SolarArrayConfig:
+    azimuth_deg: float
+    tilt_deg: float
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.azimuth_deg) or not 0 <= self.azimuth_deg < 360:
+            raise ValueError("solar array azimuth_deg must be between 0 and 360")
+        if not math.isfinite(self.tilt_deg) or not 0 <= self.tilt_deg <= 90:
+            raise ValueError("solar array tilt_deg must be between 0 and 90")
+
+
 @dataclass(frozen=True)
 class ForecastCorrectionConfig:
     method: str = "ratio_of_means_v1"
@@ -189,9 +202,6 @@ class EnergyForecastConfig:
     consumption_w: float = 130.0
     surplus_min_soc_percent: float = 30.0
     surplus_target_soc_percent: float = 95.0
-    input_efficiency: float = 1.0
-    output_efficiency: float = 1.0
-    max_age_seconds: float = 3600.0
     reserve_soc_percent: float = 30.0
     input_history_max_age_seconds: float = 120.0
 
@@ -200,10 +210,6 @@ class EnergyForecastConfig:
             raise ValueError("forecast consumption_w must be finite and nonnegative")
         if not 0 <= self.surplus_min_soc_percent < self.surplus_target_soc_percent <= 100:
             raise ValueError("forecast SOC thresholds must satisfy 0 <= minimum < target <= 100")
-        if not 0 < self.input_efficiency <= 1 or not 0 < self.output_efficiency <= 1:
-            raise ValueError("forecast efficiencies must be between 0 (exclusive) and 1")
-        if not math.isfinite(self.max_age_seconds) or self.max_age_seconds <= 0:
-            raise ValueError("forecast max_age_seconds must be finite and positive")
         if not 0 <= self.reserve_soc_percent <= self.surplus_min_soc_percent:
             raise ValueError("reserve SOC must be between 0 and surplus minimum SOC")
         if not math.isfinite(self.input_history_max_age_seconds):
@@ -220,6 +226,7 @@ class LoadConfig:
     outputs: dict[str, OutputConfig]
     battery: BatteryConfig
     forecast_sources: dict[str, ForecastSourceConfig] = field(default_factory=dict)
+    solar_array: SolarArrayConfig | None = None
     forecast_correction: ForecastCorrectionConfig = field(default_factory=ForecastCorrectionConfig)
     energy_forecast: EnergyForecastConfig = field(default_factory=EnergyForecastConfig)
 

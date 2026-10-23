@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from energy_manager import settings
 from energy_manager.config import get_brightsky_forecast_settings
 from energy_manager.forecast import forecast_data_collection, forecast_input
 from energy_manager.forecast.forecast_input import BrightSkyForecastPoint
@@ -111,6 +112,42 @@ def test_brightsky_collection_respects_hourly_interval(monkeypatch, tmp_path):
     assert row["retrieved_at"] == point.retrieved_at.isoformat()
     assert row["forecast_at"] == point.forecast_at.isoformat()
     assert row["solar_irradiation_j_m2"] == "100000.0"
+
+
+@pytest.mark.parametrize("csv_enabled", [True, False])
+def test_brightsky_collection_keeps_forecasts_and_json_state(monkeypatch, tmp_path, csv_enabled):
+    now = datetime.fromisoformat("2026-10-19T08:30:00+02:00")
+    tomorrow = datetime.fromisoformat("2026-10-20T00:00:00+02:00")
+    points = [BrightSkyForecastPoint(
+        retrieved_at=now, forecast_at=tomorrow + timedelta(hours=hour),
+        forecast_date="2026-10-20", source_id=2, source_name="Forecast",
+        sunshine_seconds=900.0, solar_irradiation_j_m2=100000.0, cloud_cover_percent=5.0,
+    ) for hour in range(1, 25)]
+    monkeypatch.setattr(settings, "CSV_LOGGING_ENABLED", csv_enabled)
+    collect = Mock(return_value=points)
+    monkeypatch.setattr(forecast_data_collection, "collect_brightsky_forecast", collect)
+    monkeypatch.setattr(
+        forecast_data_collection, "get_brightsky_forecast_settings",
+        lambda: (48.5, 9.5, "Europe/Berlin", 50000),
+    )
+    monkeypatch.setattr(forecast_data_collection, "time", Mock(monotonic=Mock(return_value=0)))
+    monkeypatch.setattr(
+        forecast_data_collection, "BRIGHTSKY_FORECAST_LOG_PATH", tmp_path / "logs" / "sky.csv",
+    )
+    state_path = tmp_path / "state" / "forecast.json"
+    monkeypatch.setattr(forecast_data_collection, "BRIGHTSKY_FORECAST_STATE_PATH", state_path)
+    state = {}
+    forecast_data_collection.update_brightsky_forecast_collection(state)
+    forecast_data_collection.update_brightsky_forecast_collection(state)
+    collect.assert_called_once()
+    assert state["bright_sky_points"] == points
+    estimate = state["bright_sky_daily_forecasts"]["tomorrow"].estimated_battery_input_wh
+    assert estimate is not None
+    saved = json.loads(state_path.read_text())
+    assert saved["daily_predictions"]["2026-10-20"]["estimated_input_wh"] == estimate
+    assert "brightsky_forecast_last_success" in state
+    assert (tmp_path / "logs").exists() is csv_enabled
+    assert bool(list(tmp_path.rglob("*.csv"))) is csv_enabled
 
 
 def test_brightsky_daily_estimates_group_tomorrow_and_day_after(monkeypatch):

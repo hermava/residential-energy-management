@@ -15,7 +15,7 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from energy_manager import battery_control, csv_logging, oscillation, recovery, runtime
+from energy_manager import battery_control, csv_logging, oscillation, recovery, runtime, settings
 
 
 def battery(soc=40.0, output=130.0, solar=200.0):
@@ -202,9 +202,28 @@ def test_measurement_gap_is_unavailable():
     assert reason == "measurement_gap"
 
 
-def test_csv_v5_columns_and_json_are_unchanged(tmp_path):
-    filename = tmp_path / "test.csv"
-    with patch.object(csv_logging, "_get_daily_log_path", return_value=(filename, False)):
+def test_disabled_csv_logging_preserves_existing_files(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "CSV_LOGGING_ENABLED", False)
+    monkeypatch.setattr(csv_logging, "LOG_PATH", tmp_path / "logs" / "status.csv")
+    monkeypatch.setattr(csv_logging, "PV_INPUT_ARCHIVE_PATH", tmp_path / "pv" / "input.csv")
+    existing = tmp_path / "existing.csv"
+    existing.write_text("timestamp,input_power_w\nold,100\n")
+    csv_logging._append_marstek_log(
+        status=status(), controller_target_w=130, control_inhibited=False,
+        last_command_w=130, command_sent=False, command_reason="deadband",
+        seconds_since_last_command=60, quality_issues=[], measurement_diagnostics={},
+        oscillation_assessment={}, recovery_info={},
+    )
+    assert list(tmp_path.iterdir()) == [existing]
+    assert existing.read_text() == "timestamp,input_power_w\nold,100\n"
+
+
+@pytest.mark.parametrize("archive_fails", [False, True])
+def test_csv_v5_columns_and_json_are_unchanged(tmp_path, monkeypatch, capsys, archive_fails):
+    monkeypatch.setattr(csv_logging, "PV_INPUT_ARCHIVE_PATH", tmp_path / "pv" / "input.csv")
+    if archive_fails:
+        (tmp_path / "pv").write_text("blocked directory")
+    with patch.object(csv_logging, "LOG_PATH", tmp_path / "test.csv"):
         csv_logging._append_marstek_log(
             status=status(), controller_target_w=41,
             control_inhibited=False, last_command_w=130,
@@ -223,6 +242,7 @@ def test_csv_v5_columns_and_json_are_unchanged(tmp_path):
                 "recovery_restore_target_w": None,
             },
         )
+    filename = next(tmp_path.glob("test_*.csv"))
     with filename.open() as f:
         row = next(csv.DictReader(f))
     assert row["command_reason"] == "deadband"
@@ -230,6 +250,15 @@ def test_csv_v5_columns_and_json_are_unchanged(tmp_path):
     assert row["recovery_state"] == "idle"
     assert json.loads(row["quality_issues"])[0]["status"] == "stale"
     assert json.loads(row["measurement_diagnostics"])["washer"]["age_seconds"] == 31.0
+    if archive_fails:
+        assert "PV input archive failed:" in capsys.readouterr().out
+        assert (tmp_path / "pv").read_text() == "blocked directory"
+    else:
+        with (tmp_path / "pv" / "input_2026-10-06.csv").open() as file:
+            archived = list(csv.DictReader(file))
+        assert archived == [{
+            "timestamp": status().received_at.isoformat(), "input_power_w": "200.0",
+        }]
 
 
 def test_recovery_info_pending_until_confirmed():
@@ -239,13 +268,13 @@ def test_recovery_info_pending_until_confirmed():
     assert info["recovery_state"] == "restore_pending"
 
 
-@pytest.mark.parametrize("correction_error", [None, ValueError("bad correction source")])
 @pytest.mark.parametrize("daily_error", [None, OSError("state save failed")])
 @pytest.mark.parametrize(
     "forecast_error", [None, OSError("log failed"), requests.ConnectionError()],
 )
-def test_runtime_wires_cycle_without_hardware(correction_error, daily_error, forecast_error):
+def test_runtime_wires_cycle_without_hardware(daily_error, forecast_error):
     cfg = config()
+    cfg.solar_array = None
     cfg.outputs = {"battery_input_energy_today": Mock()}
     daily_update = Mock(side_effect=daily_error)
     daily_publish = Mock()
@@ -293,7 +322,6 @@ def test_runtime_wires_cycle_without_hardware(correction_error, daily_error, for
         patch.object(runtime, "_print_cycle_status"),
         patch.object(runtime, "update_forecast_logging"),
         patch.object(runtime, "update_input_history", forecast_update),
-        patch.object(runtime, "update_forecast_correction", side_effect=correction_error),
     ]
     from contextlib import ExitStack
     with ExitStack() as stack:
@@ -306,8 +334,7 @@ def test_runtime_wires_cycle_without_hardware(correction_error, daily_error, for
         mocks[9].assert_called_once()
         mocks[12].assert_called_once()
         mocks[13].assert_called_once()
-        mocks[-3].assert_called_once_with(ha, cfg, st.battery_state, forecast_state)
-        mocks[-1].assert_called_once_with(ha, cfg, st.battery_state, forecast_state)
+        mocks[-2].assert_called_once_with(ha, cfg, st.battery_state, forecast_state)
         forecast_update.assert_called_once_with(st.battery_state, forecast_state, 120)
         daily_update.assert_called_once_with(st.battery_state, forecast_state, 120)
         daily_forecast.assert_called_once_with(ha, cfg, st.battery_state, forecast_state)

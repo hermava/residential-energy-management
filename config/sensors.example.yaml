@@ -29,6 +29,9 @@ outputs:
   battery_input_forecast_tomorrow_kwh:
     entity_id: sensor.residential_energy_forecast_tomorrow_kwh
 
+  battery_input_forecast_day_after_tomorrow_kwh:
+    entity_id: sensor.residential_energy_forecast_day_after_tomorrow_kwh
+
   battery_input_forecast_tomorrow_error_kwh:
     entity_id: sensor.residential_energy_forecast_tomorrow_error_kwh
 
@@ -95,6 +98,11 @@ forecast_sources:
       entity_id: sensor.openweathermap_temperature
       unit: "°C"
 
+# Azimuth convention: 0 degrees north, increasing clockwise; tilt: 0 horizontal, 90 vertical.
+solar_array:
+  azimuth_deg: 143
+  tilt_deg: 60
+
 # Heuristic correction for today's remaining energy; limits need calibration.
 forecast_correction:
   method: ratio_of_means_v1
@@ -103,13 +111,10 @@ forecast_correction:
   max_factor: 4
   max_age_seconds: 1800
 
-# Aggregate balance only; 1.0 efficiencies explicitly assume no losses.
+# Aggregate daily balance uses measured Marstek input energy directly.
 energy_forecast:
   consumption_w: 130
   surplus_min_soc_percent: 30
   surplus_target_soc_percent: 95
   reserve_soc_percent: 30
   input_history_max_age_seconds: 120
-  input_efficiency: 1.0
-  output_efficiency: 1.0
-  max_age_seconds: 3600

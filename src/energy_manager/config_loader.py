@@ -15,6 +15,7 @@ from energy_manager.models import (
     OutputConfig,
     PowerChannelType,
     PowerSensorConfig,
+    SolarArrayConfig,
 )
 
 
@@ -29,6 +30,7 @@ def load_config(path: Path) -> LoadConfig:
         outputs=_parse_outputs(data),
         battery=_parse_battery(data),
         forecast_sources=_parse_forecast_sources(data),
+        solar_array=SolarArrayConfig(**data["solar_array"]) if "solar_array" in data else None,
         forecast_correction=_parse_forecast_correction(data),
         energy_forecast=EnergyForecastConfig(**data.get("energy_forecast", {})),
     )

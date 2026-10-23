@@ -88,13 +88,6 @@ def test_strict_configurable_soc_thresholds():
     assert forecast_daily_energy(60, 301, 1, 1000, config).assessment == "surplus_expected"
 
 
-def test_efficiency_assumptions_are_explicit_and_configurable():
-    config = EnergyForecastConfig(input_efficiency=0.9, output_efficiency=0.8)
-    result = forecast_daily_energy(40, 1000, 2, 2240, config)
-    assert result.consumption_wh == 325
-    assert result.balance_energy_wh == 896 + 900 - 325
-
-
 @pytest.mark.parametrize("soc,pv,hours", [
     (None, 1000, 2), (40, None, 2), (40, 1000, None),
     (float("nan"), 1000, 2), (40, float("inf"), 2), (40, 1000, float("nan")),
@@ -125,8 +118,6 @@ def test_invalid_correction_is_unavailable(factor):
 @pytest.mark.parametrize("kwargs", [
     {"consumption_w": -1}, {"consumption_w": float("nan")},
     {"surplus_min_soc_percent": 95}, {"surplus_target_soc_percent": 101},
-    {"input_efficiency": 0}, {"output_efficiency": 1.1},
-    {"input_efficiency": float("nan")},
 ])
 def test_invalid_forecast_configuration(kwargs):
     with pytest.raises(ValueError):
@@ -166,15 +157,12 @@ def test_reserve_threshold_and_consumption_are_configurable():
     assert result.assessment == "limited"
 
 
-def test_declining_reserve_uses_corrected_energy_and_configured_losses():
+def test_declining_reserve_uses_corrected_energy():
     config = EnergyForecastConfig()
     original = forecast_daily_energy(20, 400, 2, 2240, config, input_mean_w=0)
     corrected = forecast_daily_energy(20, 400, 2, 2240, config, 0.5, input_mean_w=0)
     assert original.assessment == "limited"
     assert corrected.assessment == "reserve_at_risk"
-    losses = replace(config, input_efficiency=0.9)
-    result = forecast_daily_energy(20, 260, 2, 2240, losses, input_mean_w=0)
-    assert result.assessment == "reserve_at_risk"
 
 
 @pytest.mark.parametrize("kwargs", [

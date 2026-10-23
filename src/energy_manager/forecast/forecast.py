@@ -46,10 +46,10 @@ def forecast_daily_energy(
         if not math.isfinite(correction_factor) or correction_factor < 0:
             return DailyEnergyForecast("unavailable", "unavailable", "invalid_correction")
     effective_pv = remaining_pv_wh * (correction_factor if correction_factor is not None else 1)
-    consumption = config.consumption_w * horizon_hours / config.output_efficiency
+    consumption = config.consumption_w * horizon_hours
     stored = capacity_wh * soc_percent / 100
-    original_balance = stored + remaining_pv_wh * config.input_efficiency - consumption
-    balance = stored + effective_pv * config.input_efficiency - consumption
+    original_balance = stored + remaining_pv_wh - consumption
+    balance = stored + effective_pv - consumption
     assessment, quality, reason = _assess_daily_reserve(
         soc_percent, balance, stored, capacity_wh, input_mean_w, config,
     )
@@ -66,7 +66,7 @@ def forecast_daily_energy(
         balance_soc_percent=min(100.0, max(0.0, balance / capacity_wh * 100)),
         balance_energy_wh=balance,
         surplus_energy_wh=max(0.0, balance - capacity_wh),
-        reserve_change_wh=effective_pv * config.input_efficiency - consumption,
+        reserve_change_wh=effective_pv - consumption,
     )
 
 

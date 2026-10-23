@@ -10,11 +10,13 @@ import requests
 from energy_manager.adapters.home_assistant import HomeAssistantAdapter
 from energy_manager.config import get_brightsky_forecast_settings
 from energy_manager.exceptions import EntityUnavailableError
+from energy_manager.forecast.solar_geometry import calculate_solar_geometry_features
 from energy_manager.models import (
     BatteryState,
     ForecastSensorConfig,
     ForecastSourceConfig,
     LoadConfig,
+    SolarArrayConfig,
 )
 
 BRIGHTSKY_WEATHER_URL = "https://api.brightsky.dev/weather"
@@ -30,6 +32,11 @@ class BrightSkyForecastPoint:
     sunshine_seconds: float | None
     solar_irradiation_j_m2: float | None
     cloud_cover_percent: float | None
+    solar_altitude_deg: float | None = None
+    solar_azimuth_deg: float | None = None
+    panel_incidence_cosine: float | None = None
+    day_of_year_sin: float | None = None
+    day_of_year_cos: float | None = None
 
 
 @dataclass(frozen=True)
@@ -168,7 +175,9 @@ def read_forecast_power(ha: HomeAssistantAdapter, config: LoadConfig) -> float |
     return value if math.isfinite(value) and value >= 0 else None
 
 
-def collect_brightsky_forecast(now: datetime | None = None) -> list[BrightSkyForecastPoint]:
+def collect_brightsky_forecast(
+    now: datetime | None = None, solar_array: SolarArrayConfig | None = None,
+) -> list[BrightSkyForecastPoint]:
     settings = get_brightsky_forecast_settings()
     if settings is None:
         return []
@@ -208,6 +217,13 @@ def collect_brightsky_forecast(now: datetime | None = None) -> list[BrightSkyFor
         forecast_at = datetime.fromisoformat(record["timestamp"])
         if forecast_at < local_now:
             continue
+        forecast_midpoint = forecast_at - timedelta(minutes=30)
+        geometry = None
+        if solar_array is not None:
+            geometry = calculate_solar_geometry_features(
+                forecast_midpoint, latitude, longitude,
+                solar_array.azimuth_deg, solar_array.tilt_deg,
+            )
         points.append(BrightSkyForecastPoint(
             retrieved_at=retrieved_at,
             forecast_at=forecast_at,
@@ -217,6 +233,11 @@ def collect_brightsky_forecast(now: datetime | None = None) -> list[BrightSkyFor
             sunshine_seconds=_optional_float(record.get("sunshine")),
             solar_irradiation_j_m2=_optional_float(record.get("solar")),
             cloud_cover_percent=_optional_float(record.get("cloud_cover")),
+            solar_altitude_deg=geometry.solar_altitude_deg if geometry else None,
+            solar_azimuth_deg=geometry.solar_azimuth_deg if geometry else None,
+            panel_incidence_cosine=geometry.panel_incidence_cosine if geometry else None,
+            day_of_year_sin=geometry.day_of_year_sin if geometry else None,
+            day_of_year_cos=geometry.day_of_year_cos if geometry else None,
         ))
     return sorted(points, key=lambda point: (point.forecast_at, point.source_id))
 

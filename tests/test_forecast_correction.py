@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
+from energy_manager import settings
 from energy_manager.forecast.forecast import (
     CORRECTION_METHODS,
     CorrectionResult,
@@ -114,6 +115,20 @@ def test_paired_history_full_battery_and_single_snapshot_csv(tmp_path, samples):
         row = next(csv.DictReader(file))
     assert float(row["solar_today_remaining_wh"]) == 2000
     assert len(list(tmp_path.glob("*.csv"))) == 1
+
+
+def test_disabled_snapshot_logging_skips_ha_and_file_access(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "CSV_LOGGING_ENABLED", False)
+    monkeypatch.setattr(
+        "energy_manager.forecast.forecast_data_collection.FORECAST_LOG_PATH",
+        tmp_path / "logs" / "snapshot.csv",
+    )
+    ha = Mock()
+    state = {}
+    update_forecast_logging(ha, config(), None, state)
+    ha.get_entity_state.assert_not_called()
+    assert state == {}
+    assert not list(tmp_path.iterdir())
 
 
 def test_optional_power_source_does_not_require_ha_access():

@@ -1,6 +1,5 @@
 """Persist forecast inputs for later comparison and model calibration."""
 
-import csv
 import json
 import math
 import time
@@ -9,8 +8,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from energy_manager import settings
 from energy_manager.adapters.home_assistant import HomeAssistantAdapter
 from energy_manager.config import get_brightsky_forecast_settings
+from energy_manager.csv_logging import append_csv_row
 from energy_manager.forecast.forecast import (
     DailyBatteryInputForecast,
     DailyEnergyForecast,
@@ -216,7 +217,7 @@ def update_daily_forecast(
     horizon = _today_horizon(now, sunset)
     solar = config.forecast_sources.get("solar")
     solar_remaining_comparison = _read_energy_wh(
-        ha, _get_sensor(solar, "today_remaining"), config.energy_forecast.max_age_seconds,
+        ha, _get_sensor(solar, "today_remaining"),
     )
     bright_points = state.get("bright_sky_points", [])
     remaining, irradiation_covered_seconds, irradiation_intervals = _remaining_brightsky_input(
@@ -279,8 +280,6 @@ def update_daily_forecast(
             "bright_sky_input_power_now_irradiation_j_m2",
         ),
         "consumption_w": config.energy_forecast.consumption_w,
-        "input_efficiency": config.energy_forecast.input_efficiency,
-        "output_efficiency": config.energy_forecast.output_efficiency,
         "surplus_min_soc_percent": config.energy_forecast.surplus_min_soc_percent,
         "surplus_target_soc_percent": config.energy_forecast.surplus_target_soc_percent,
         "reserve_soc_percent": config.energy_forecast.reserve_soc_percent,
@@ -291,16 +290,16 @@ def update_daily_forecast(
         ),
     }
     bright_sky_forecasts = state.get("bright_sky_daily_forecasts", {})
-    for key, forecast in bright_sky_forecasts.items():
-        context[f"{key}_assessment"] = forecast.assessment
-        context[f"{key}_data_quality"] = forecast.data_quality
-        context[f"{key}_reason"] = forecast.reason
-        context[f"{key}_solar_irradiation_j_m2"] = forecast.solar_irradiation_j_m2
-        context[f"{key}_estimated_battery_input_wh"] = forecast.estimated_battery_input_wh
-        context[f"{key}_available_hours"] = forecast.available_hours
-        context[f"{key}_expected_hours"] = forecast.expected_hours
+    for key, input_forecast in bright_sky_forecasts.items():
+        context[f"{key}_assessment"] = input_forecast.assessment
+        context[f"{key}_data_quality"] = input_forecast.data_quality
+        context[f"{key}_reason"] = input_forecast.reason
+        context[f"{key}_solar_irradiation_j_m2"] = input_forecast.solar_irradiation_j_m2
+        context[f"{key}_estimated_battery_input_wh"] = input_forecast.estimated_battery_input_wh
+        context[f"{key}_available_hours"] = input_forecast.available_hours
+        context[f"{key}_expected_hours"] = input_forecast.expected_hours
     state["daily_forecast"] = forecast
-    append_forecast_row({**context, **asdict(forecast)}, now, FORECAST_DAILY_LOG_PATH)
+    append_csv_row({**context, **asdict(forecast)}, now, FORECAST_DAILY_LOG_PATH)
     _publish_energy_forecast(config, ha, forecast, context)
     power_output = config.outputs.get("battery_input_forecast_now_w")
     if power_output is not None:
@@ -341,24 +340,37 @@ def update_daily_forecast(
                     )).isoformat(),
                 },
             )
-        if key == "tomorrow" and forecast.estimated_battery_input_wh is not None:
-            energy_output = config.outputs.get("battery_input_forecast_tomorrow_kwh")
-            if energy_output is not None:
-                ha.publish_state(
-                    energy_output.entity_id,
-                    forecast.estimated_battery_input_wh / 1000,
-                    attributes={
-                        "friendly_name": "Residential Battery Input Energy Forecast Tomorrow",
-                        "unit_of_measurement": "kWh",
-                        "device_class": "energy",
-                        "forecast_date": (now.astimezone(LOCAL_TIMEZONE).date()
-                                          + timedelta(days=1)).isoformat(),
-                        "forecast_at": state.get("bright_sky_retrieved_at"),
-                        "data_quality": forecast.data_quality,
-                        "model": forecast.model,
-                    },
-                )
+    _publish_brightsky_energy_forecasts(ha, config, bright_sky_forecasts, now, state)
     state["last_daily_forecast_at"] = monotonic_now
+
+
+def _publish_brightsky_energy_forecasts(
+    ha: HomeAssistantAdapter, config: LoadConfig,
+    forecasts: dict[str, DailyBatteryInputForecast], now: datetime, state: dict,
+) -> None:
+    for offset, key in ((1, "tomorrow"), (2, "day_after_tomorrow")):
+        output = config.outputs.get(f"battery_input_forecast_{key}_kwh")
+        if output is None:
+            continue
+        forecast = forecasts.get(key)
+        energy_wh = forecast.estimated_battery_input_wh if forecast is not None else None
+        ha.publish_state(
+            output.entity_id,
+            energy_wh / 1000 if energy_wh is not None else "unavailable",
+            attributes={
+                "friendly_name": (
+                    f"Residential Battery Input Energy Forecast {key.replace('_', ' ').title()}"
+                ),
+                "unit_of_measurement": "kWh",
+                "device_class": "energy",
+                "forecast_date": (
+                    now.astimezone(LOCAL_TIMEZONE).date() + timedelta(days=offset)
+                ).isoformat(),
+                "forecast_at": state.get("bright_sky_retrieved_at"),
+                "data_quality": forecast.data_quality if energy_wh is not None else "unavailable",
+                "model": forecast.model if forecast is not None else None,
+            },
+        )
 
 
 def update_input_history(
@@ -408,18 +420,7 @@ def update_forecast_correction(
 def append_forecast_snapshot(snapshot: ForecastSnapshot, base_path: Path) -> None:
     row = asdict(snapshot)
     row["timestamp"] = snapshot.timestamp.isoformat()
-    append_forecast_row(row, snapshot.timestamp, base_path)
-
-
-def append_forecast_row(row: dict, timestamp: datetime, base_path: Path) -> None:
-    log_path = base_path.with_name(f"{base_path.stem}_{timestamp:%Y-%m-%d}{base_path.suffix}")
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    file_exists = log_path.exists()
-    with log_path.open("a", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=row.keys())
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(row)
+    append_csv_row(row, snapshot.timestamp, base_path)
 
 
 def update_forecast_logging(
@@ -428,6 +429,8 @@ def update_forecast_logging(
     battery_state: BatteryState | None,
     state: dict,
 ) -> None:
+    if not settings.CSV_LOGGING_ENABLED:
+        return
     now = time.monotonic()
     last_log_at = state.get("last_log_at")
     if last_log_at is not None and now - last_log_at < FORECAST_LOG_INTERVAL_SECONDS:
@@ -438,7 +441,7 @@ def update_forecast_logging(
 
 
 def update_brightsky_forecast_collection(
-    state: dict, battery_capacity_wh: float = 2240.0,
+    state: dict, battery_capacity_wh: float = 2240.0, solar_array=None,
 ) -> None:
     now = time.monotonic()
     last_attempt = state.get("brightsky_forecast_last_attempt")
@@ -451,7 +454,7 @@ def update_brightsky_forecast_collection(
         return
     state["brightsky_forecast_last_attempt"] = now
     try:
-        points = collect_brightsky_forecast()
+        points = collect_brightsky_forecast(solar_array=solar_array)
     except Exception:
         state["brightsky_forecast_last_error"] = True
         raise
@@ -459,7 +462,7 @@ def update_brightsky_forecast_collection(
         row = asdict(point)
         row["retrieved_at"] = point.retrieved_at.isoformat()
         row["forecast_at"] = point.forecast_at.isoformat()
-        append_forecast_row(row, point.retrieved_at, BRIGHTSKY_FORECAST_LOG_PATH)
+        append_csv_row(row, point.retrieved_at, BRIGHTSKY_FORECAST_LOG_PATH)
     retrieved_at = points[0].retrieved_at if points else datetime.now(UTC)
     state["bright_sky_points"] = points
     state["bright_sky_daily_forecasts"] = _daily_brightsky_forecasts(

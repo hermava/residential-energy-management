@@ -5,29 +5,37 @@ import json
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+from energy_manager import settings
 from energy_manager.adapters.marstek_mqtt import MarstekStatus
-from energy_manager.settings import LOG_PATH, LOG_RETENTION_DAYS
+from energy_manager.settings import LOG_PATH, LOG_RETENTION_DAYS, PV_INPUT_ARCHIVE_PATH
 
 
-def _get_daily_log_path() -> tuple[Path, bool]:
-    now = datetime.now(UTC)
-    log_path = LOG_PATH.with_name(
-        f"{LOG_PATH.stem}_{now:%Y-%m-%d}{LOG_PATH.suffix}"
-    )
+def append_csv_row(
+    row: dict, timestamp: datetime, base_path: Path, retention_days: int | None = None,
+) -> None:
+    if not settings.CSV_LOGGING_ENABLED:
+        return
+    log_path = base_path.with_name(f"{base_path.stem}_{timestamp:%Y-%m-%d}{base_path.suffix}")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     file_exists = log_path.exists()
-    if not file_exists:
-        cutoff = now.date() - timedelta(days=LOG_RETENTION_DAYS)
-        for old_path in LOG_PATH.parent.glob(f"{LOG_PATH.stem}_????-??-??.csv"):
-            try:
-                log_date = date.fromisoformat(
-                    old_path.stem.removeprefix(f"{LOG_PATH.stem}_")
-                )
-            except ValueError:
-                continue
-            if log_date < cutoff:
-                old_path.unlink()
-    return log_path, file_exists
+    if not file_exists and retention_days is not None:
+        _remove_old_csv_files(base_path, timestamp.date(), retention_days)
+    with log_path.open("a", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=row.keys())
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
+
+
+def _remove_old_csv_files(base_path: Path, today: date, retention_days: int) -> None:
+    cutoff = today - timedelta(days=retention_days)
+    for old_path in base_path.parent.glob(f"{base_path.stem}_????-??-??.csv"):
+        try:
+            log_date = date.fromisoformat(old_path.stem.removeprefix(f"{base_path.stem}_"))
+        except ValueError:
+            continue
+        if log_date < cutoff:
+            old_path.unlink()
 
 def _append_marstek_log(
     status: MarstekStatus,
@@ -42,7 +50,8 @@ def _append_marstek_log(
     oscillation_assessment: dict,
     recovery_info: dict,
 ) -> None:
-    log_path, file_exists = _get_daily_log_path()
+    if not settings.CSV_LOGGING_ENABLED:
+        return
     battery = status.battery_state
     raw = status.raw_values
     row = {
@@ -89,8 +98,11 @@ def _append_marstek_log(
         "recovery_event": recovery_info["recovery_event"],
         "recovery_restore_target_w": recovery_info["recovery_restore_target_w"],
     }
-    with log_path.open("a", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=row.keys())
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(row)
+    append_csv_row(row, datetime.now(UTC), LOG_PATH, retention_days=LOG_RETENTION_DAYS)
+    try:
+        append_csv_row(
+            {"timestamp": status.received_at.isoformat(), "input_power_w": battery.input_power_w},
+            status.received_at, PV_INPUT_ARCHIVE_PATH,
+        )
+    except OSError as exc:
+        print(f"PV input archive failed: {exc}")

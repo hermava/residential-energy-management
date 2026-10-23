@@ -6,6 +6,7 @@ from unittest.mock import Mock
 import pytest
 import requests
 
+from energy_manager import settings
 from energy_manager.exceptions import EntityUnavailableError
 from energy_manager.forecast import forecast_data_collection as daily_forecast
 from energy_manager.forecast import forecast_input
@@ -59,9 +60,17 @@ def setup_forecast(monkeypatch, tmp_path):
     return now, config, readings, ha, battery, tmp_path
 
 
-def test_forecast_uses_sunset_correction_and_configured_output(setup_forecast):
+@pytest.mark.parametrize("csv_enabled", [True, False])
+def test_forecast_uses_sunset_correction_and_configured_output(
+    setup_forecast, monkeypatch, csv_enabled,
+):
+    monkeypatch.setattr(settings, "CSV_LOGGING_ENABLED", csv_enabled)
     now, config, readings, ha, battery, path = setup_forecast
     state = {"correction": CorrectionResult("ratio_of_means_v1", "available", 0.5, 0.5)}
+    state["bright_sky_daily_forecasts"] = {
+        "tomorrow": DailyBatteryInputForecast("yellow", "low", "test", 0, 24, 24, 1500),
+        "day_after_tomorrow": DailyBatteryInputForecast("red", "low", "test", 0, 24, 24, 500),
+    }
     state["bright_sky_points"] = [
         forecast_input.BrightSkyForecastPoint(
             retrieved_at=now,
@@ -75,6 +84,9 @@ def test_forecast_uses_sunset_correction_and_configured_output(setup_forecast):
         )
         for index in range(4)
     ]
+    daily_forecast.update_input_history(battery, state, config.battery.max_age_seconds)
+    assert state["input_statistics"].sample_count == 1
+    assert state["input_statistics"].mean_w == 500
     daily_forecast.update_daily_forecast(ha, config, battery, state)
     result = state["daily_forecast"]
     assert result.horizon_hours == 4
@@ -86,6 +98,9 @@ def test_forecast_uses_sunset_correction_and_configured_output(setup_forecast):
     assert call.args == ("sensor.custom_forecast", "limited")
     assert call.kwargs["attributes"]["data_quality"] == "heuristic"
     assert call.kwargs["attributes"]["sunset_at"] == readings["sensor.sunset"]
+    if not csv_enabled:
+        assert not list(path.iterdir())
+        return
     with (path / "forecast_2026-10-15.csv").open() as file:
         row = next(csv.DictReader(file))
     assert float(row["effective_pv_wh"]) == pytest.approx(125.55)
@@ -116,15 +131,18 @@ def test_tomorrow_and_day_after_ampels_publish_when_outputs_are_configured(setup
     daily_forecast.update_daily_forecast(ha, config, battery, state)
 
     published = {call.args[0]: call.args[1] for call in ha.publish_state.call_args_list}
+    assert published["sensor.today"] == "unavailable"
+    assert state["daily_forecast"].reason == "missing_or_invalid_data"
     assert published["sensor.tomorrow"] == "yellow"
     assert published["sensor.day_after"] == "red"
 
 
-def test_power_forecast_now_and_tomorrow_energy_publish_with_units(setup_forecast):
+def test_power_and_daily_energy_forecasts_publish_with_units(setup_forecast):
     now, config, _, ha, battery, _ = setup_forecast
     config = replace(config, outputs={
         "forecast_status_today": OutputConfig("sensor.today"),
         "battery_input_forecast_tomorrow_kwh": OutputConfig("sensor.tomorrow_kwh"),
+        "battery_input_forecast_day_after_tomorrow_kwh": OutputConfig("sensor.day_after_kwh"),
         "battery_input_forecast_now_w": OutputConfig("sensor.power_forecast_now"),
     })
     state = {
@@ -135,6 +153,10 @@ def test_power_forecast_now_and_tomorrow_energy_publish_with_units(setup_forecas
             "tomorrow": DailyBatteryInputForecast(
                 "yellow", "low", "five_day_historical_fit", 7_200_000,
                 24, 24, 1743.4,
+            ),
+            "day_after_tomorrow": DailyBatteryInputForecast(
+                "red", "low", "five_day_historical_fit", 3_600_000,
+                24, 24, 891.9,
             ),
         },
     }
@@ -151,6 +173,40 @@ def test_power_forecast_now_and_tomorrow_energy_publish_with_units(setup_forecas
     tomorrow_call = published["sensor.tomorrow_kwh"]
     assert tomorrow_call.args[1] == pytest.approx(1.7434)
     assert tomorrow_call.kwargs["attributes"]["unit_of_measurement"] == "kWh"
+    assert tomorrow_call.kwargs["attributes"]["forecast_date"] == "2026-10-16"
+    day_after_call = published["sensor.day_after_kwh"]
+    assert day_after_call.args[1] == pytest.approx(0.8919)
+    attributes = day_after_call.kwargs["attributes"]
+    assert attributes["unit_of_measurement"] == "kWh"
+    assert attributes["device_class"] == "energy"
+    assert attributes["forecast_date"] == "2026-10-17"
+    assert attributes["forecast_at"] == now.isoformat()
+    assert attributes["data_quality"] == "low"
+    assert attributes["model"] == "brightsky_irradiation_linear_v1"
+
+
+@pytest.mark.parametrize("horizon", ["tomorrow", "day_after_tomorrow"])
+@pytest.mark.parametrize("case", ["missing", "incomplete", "zero"])
+def test_daily_energy_forecast_handles_missing_data_and_zero(setup_forecast, horizon, case):
+    now, config, _, ha, battery, _ = setup_forecast
+    config = replace(config, outputs={
+        f"battery_input_forecast_{horizon}_kwh": OutputConfig("sensor.energy_forecast"),
+    })
+    forecasts = {}
+    if case != "missing":
+        forecasts[horizon] = DailyBatteryInputForecast(
+            "red" if case == "zero" else "unavailable",
+            "low" if case == "zero" else "unavailable",
+            "test", 0, 24 if case == "zero" else 0, 24, 0 if case == "zero" else None,
+        )
+    state = {"bright_sky_daily_forecasts": forecasts, "bright_sky_retrieved_at": now.isoformat()}
+    daily_forecast.update_daily_forecast(ha, config, battery, state)
+    ha.publish_state.assert_called_once()
+    call = ha.publish_state.call_args
+    assert call.args == ("sensor.energy_forecast", 0.0 if case == "zero" else "unavailable")
+    assert call.kwargs["attributes"]["data_quality"] == (
+        "low" if case == "zero" else "unavailable"
+    )
 
 
 @pytest.mark.parametrize("value,reason", [

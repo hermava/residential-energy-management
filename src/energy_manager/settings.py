@@ -3,8 +3,10 @@
 from pathlib import Path
 
 UPDATE_INTERVAL_SECONDS = 10
-LOG_PATH = Path("data/marstek_status_closed_loop_V5.csv")
+CSV_LOGGING_ENABLED = True  # Diagnostic CSV files only; keep operational state persistence.
+LOG_PATH = Path("data/logs/marstek/marstek_status_closed_loop_V5.csv")
 LOG_RETENTION_DAYS = 10
+PV_INPUT_ARCHIVE_PATH = Path("data/logs/forecast/pv_input_history.csv")
 COMMAND_DEADBAND_W = 10.0
 MIN_COMMAND_INTERVAL_SECONDS = 60.0
 MIN_TEST_COMMAND_POWER_W = 120.0
@@ -30,12 +32,12 @@ OSC_MIN_DIRECTION_CHANGE_W = 10.0
 OSC_MIN_REVERSALS = 3
 OSC_CLEAR_DELAY_SECONDS = 60.0
 
-FORECAST_LOG_PATH = Path("data/energy_forecast_history.csv")
+FORECAST_LOG_PATH = Path("data/logs/forecast/energy_forecast_history.csv")
 FORECAST_LOG_INTERVAL_SECONDS = 60
 FORECAST_INPUT_HISTORY_SECONDS = 10 * 60
 FORECAST_MIN_HISTORY_SAMPLES = 10
-FORECAST_DAILY_LOG_PATH = Path("data/energy_forecast_daily_v3.csv")
-BRIGHTSKY_FORECAST_LOG_PATH = Path("data/brightsky_forecast.csv")
+FORECAST_DAILY_LOG_PATH = Path("data/logs/forecast/energy_forecast_daily_v4.csv")
+BRIGHTSKY_FORECAST_LOG_PATH = Path("data/logs/forecast/brightsky_forecast.csv")
 BRIGHTSKY_FORECAST_INTERVAL_SECONDS = 3600
 BRIGHTSKY_FORECAST_RETRY_SECONDS = 300
 BRIGHTSKY_FORECAST_STATE_PATH = Path("data/brightsky_forecast_state.json")
