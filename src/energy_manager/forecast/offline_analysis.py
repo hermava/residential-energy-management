@@ -2,6 +2,7 @@
 
 import csv
 import math
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -210,7 +211,7 @@ def integrate_power_interval(
         segment_end = min(right_at, end)
         if segment_end <= segment_start:
             continue
-        if segment_start > cursor + timedelta(seconds=1):
+        if segment_start > cursor:
             return None
         start_fraction = (segment_start - left_at).total_seconds() / gap
         end_fraction = (segment_end - left_at).total_seconds() / gap
@@ -221,7 +222,7 @@ def integrate_power_interval(
             * (segment_end - segment_start).total_seconds() / 3600
         )
         cursor = segment_end
-        if cursor >= end - timedelta(seconds=1):
+        if cursor >= end:
             return energy_wh
     return None
 
@@ -232,31 +233,71 @@ def build_hourly_training_rows(
     longitude_deg: float | None = None, panel_azimuth_deg: float | None = None,
     panel_tilt_deg: float | None = None,
 ) -> list[dict[str, str | float]]:
+    rows = build_hourly_forecast_rows(
+        forecast_paths, measurement_paths, max_gap_seconds, latitude_deg,
+        longitude_deg, panel_azimuth_deg, panel_tilt_deg,
+    )
+    return [row for row in select_latest_forecasts(rows) if row["actual_battery_input_wh"] != ""]
+
+
+def select_latest_forecasts(
+    rows: list[dict], minimum_lead_hours: float = 0, maximum_lead_hours: float = math.inf,
+) -> list[dict]:
+    """Select one forecast per target, using half-open lead bounds in elapsed UTC hours."""
+    selected = {}
+    for row in rows:
+        start = datetime.fromisoformat(row["target_start"]).astimezone(UTC)
+        retrieved = datetime.fromisoformat(row["forecast_at"]).astimezone(UTC)
+        lead = (start - retrieved).total_seconds() / 3600
+        if minimum_lead_hours <= lead < maximum_lead_hours:
+            previous = selected.get(start)
+            if previous is None or retrieved > datetime.fromisoformat(previous["forecast_at"]):
+                selected[start] = row
+    return [selected[start] for start in sorted(selected)]
+
+
+def build_hourly_forecast_rows(
+    forecast_paths: list[Path], measurement_paths: list[Path],
+    max_gap_seconds: float = OFFLINE_MAX_GAP_SECONDS, latitude_deg: float | None = None,
+    longitude_deg: float | None = None, panel_azimuth_deg: float | None = None,
+    panel_tilt_deg: float | None = None,
+) -> list[dict[str, str | float]]:
+    """Retain every archived forecast version, including targets without complete measurements."""
+    if not math.isfinite(max_gap_seconds) or max_gap_seconds <= 0:
+        raise ValueError("maximum measurement gap must be finite and positive")
     forecasts = _load_forecasts(
         forecast_paths, latitude_deg, longitude_deg, panel_azimuth_deg, panel_tilt_deg,
     )
     measurements = _load_measurements(measurement_paths)
+    timestamps = [stamp for stamp, _ in measurements]
     rows = []
     for target_start, candidates in sorted(forecasts.items()):
-        available = [row for row in candidates if row["retrieved_at"] <= target_start]
-        if not available:
-            continue
-        forecast = max(available, key=lambda row: row["retrieved_at"])
         target_end = target_start + timedelta(hours=1)
+        left = max(0, bisect_right(timestamps, target_start) - 1)
+        right = bisect_left(timestamps, target_end) + 1
         actual_wh = integrate_power_interval(
-            measurements, target_start, target_end, max_gap_seconds,
+            measurements[left:right], target_start, target_end, max_gap_seconds,
         )
-        if actual_wh is None:
-            continue
-        row = {
-            "target_start": target_start.isoformat(),
-            "target_end": target_end.isoformat(),
-            "forecast_at": forecast["retrieved_at"].isoformat(),
-            "forecast_lead_hours": (target_start - forecast["retrieved_at"]).total_seconds() / 3600,
-            "actual_battery_input_wh": actual_wh,
-        }
-        row.update({field: forecast.get(field, "") for field in PAIR_FIELDS[4:-1]})
-        rows.append(row)
+        versions = {}
+        for forecast in candidates:
+            retrieved = forecast["retrieved_at"]
+            if retrieved > target_start:
+                continue
+            if retrieved in versions and versions[retrieved] != forecast:
+                raise ValueError(
+                    f"Conflicting forecasts for {target_start} retrieved at {retrieved}"
+                )
+            versions[retrieved] = forecast
+        for retrieved, forecast in sorted(versions.items()):
+            row = {
+                "target_start": target_start.isoformat(),
+                "target_end": target_end.isoformat(),
+                "forecast_at": retrieved.isoformat(),
+                "forecast_lead_hours": (target_start - retrieved).total_seconds() / 3600,
+                "actual_battery_input_wh": actual_wh if actual_wh is not None else "",
+            }
+            row.update({field: forecast.get(field, "") for field in PAIR_FIELDS[4:-1]})
+            rows.append(row)
     return rows
 
 
@@ -327,6 +368,10 @@ def _load_forecasts(
                 try:
                     forecast_at = datetime.fromisoformat(row["forecast_at"])
                     retrieved_at = datetime.fromisoformat(row["retrieved_at"])
+                    if forecast_at.utcoffset() is None or retrieved_at.utcoffset() is None:
+                        continue
+                    forecast_at = forecast_at.astimezone(UTC)
+                    retrieved_at = retrieved_at.astimezone(UTC)
                     start = forecast_at - timedelta(hours=1)
                     irradiation = float(row["solar_irradiation_j_m2"])
                 except (KeyError, TypeError, ValueError):

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from energy_manager.forecast.offline_analysis import (
+    build_hourly_forecast_rows,
     build_hourly_training_rows,
     evaluate_hourly_feature_model,
     integrate_power_interval,
@@ -27,6 +28,53 @@ def test_integrate_power_interval_rejects_incomplete_or_gapped_data():
         [(start, 100.0), (start + timedelta(seconds=61), 100.0)],
         start, start + timedelta(seconds=61),
     ) is None
+
+
+def test_offline_integration_does_not_round_a_short_interval_up_to_complete():
+    start = datetime.fromisoformat("2026-10-21T10:00:00+02:00")
+    end = start + timedelta(seconds=60)
+    samples = [(start, 100), (end - timedelta(milliseconds=500), 100)]
+    assert integrate_power_interval(samples, start, end) is None
+
+
+def test_archive_keeps_old_versions_and_missing_measurements_without_duplicates(tmp_path):
+    path = tmp_path / "forecast.csv"
+    path.write_text(
+        "retrieved_at,forecast_at,solar_irradiation_j_m2\n"
+        "2026-10-20T18:00:00+02:00,2026-10-21T13:00:00+02:00,1000\n"
+        "2026-10-21T11:00:00+02:00,2026-10-21T13:00:00+02:00,2000\n"
+        "2026-10-21T12:01:00+02:00,2026-10-21T13:00:00+02:00,3000\n"
+        "2026-10-21T11:00:00,2026-10-21T13:00:00,4000\n"
+    )
+    rows = build_hourly_forecast_rows([path, path], [])
+    assert len(rows) == 2
+    assert [row["solar_irradiation_j_m2"] for row in rows] == [1000, 2000]
+    assert all(row["actual_battery_input_wh"] == "" for row in rows)
+    assert build_hourly_training_rows([path], []) == []
+
+
+def test_archive_rejects_conflicting_copies_of_a_forecast(tmp_path):
+    path = tmp_path / "forecast.csv"
+    path.write_text(
+        "retrieved_at,forecast_at,solar_irradiation_j_m2\n"
+        "2026-10-20T18:00:00+02:00,2026-10-21T13:00:00+02:00,1000\n"
+        "2026-10-20T18:00:00+02:00,2026-10-21T13:00:00+02:00,2000\n"
+    )
+    with pytest.raises(ValueError, match="Conflicting forecasts"):
+        build_hourly_forecast_rows([path], [])
+
+
+def test_archive_distinguishes_repeated_hour_at_dst_transition(tmp_path):
+    path = tmp_path / "forecast.csv"
+    path.write_text(
+        "retrieved_at,forecast_at,solar_irradiation_j_m2\n"
+        "2026-10-24T18:00:00+02:00,2026-10-25T02:00:00+02:00,1000\n"
+        "2026-10-24T18:00:00+02:00,2026-10-25T02:00:00+01:00,2000\n"
+    )
+    rows = build_hourly_forecast_rows([path], [])
+    assert [row["target_start"] for row in rows] == [
+        "2026-10-24T23:00:00+00:00", "2026-10-25T00:00:00+00:00",
+    ]
 
 
 @pytest.mark.parametrize("gap_seconds", [31, 60, 61])

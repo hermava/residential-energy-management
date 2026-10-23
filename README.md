@@ -269,6 +269,8 @@ Generate hourly Bright Sky / measured MARSTEK input pairs with:
   --data-dir data \
   --config config/sensors.yaml \
   --max-gap-seconds 60 \
+  --decision-time 18:00 \
+  --max-snapshot-age-hours 2 \
   --output /tmp/bright_sky_input_training_pairs.csv \
   --model-report /tmp/power_model_comparison.json
 ```
@@ -302,6 +304,31 @@ forecast accuracy, especially for tomorrow or the day after tomorrow.
 Collect several weeks of complete measurements before drawing conclusions;
 this still does not establish seasonal performance. Any model change requires
 offline review and explicit adoption.
+
+The JSON report also contains `horizon_evaluation`. It selects the latest archived
+version per target hour within each lead range: [0, 1), [1, 3), [3, 12), [12, 24),
+[24, 48), and 48+ hours. Each target is counted once per range. Counts and model
+parameters are reported separately; different ranges can contain different targets.
+
+For daily planning, `--decision-time` uses local time in the configured Bright Sky
+timezone (default 18:00). Tomorrow and the day after tomorrow each use the last
+single weather snapshot available at that decision time, without mixing updates.
+`--max-snapshot-age-hours` rejects old snapshots (default 2 hours). Each daily case
+records the decision and retrieval times, expected and covered hours, measured
+and predicted kWh, and an exclusion reason when incomplete. Local days retain
+their actual 23/24/25-hour length. Ambiguous or nonexistent local decision times
+at DST transitions are excluded rather than guessed.
+
+The horizon evaluation holds out the same later local target days across all
+groups. Within each group the model is fitted once, using only measurements that
+end before both the test-day boundary and the earliest evaluated issue time
+(the decision time for daily planning). This can leave fewer training pairs for
+longer leads. A group without enough training data still reports the fixed hourly
+baseline, but leaves fitted-model scores unavailable. Daily scores use only fully
+covered matching days and report MAE, RMSE and prediction-minus-measurement bias in
+kWh. The daily baseline integrates the existing hourly power formula; it does not
+use the separate runtime daily regression. The CSV training export and original
+top-level comparison retain their latest-before-target selection.
 
 The separate pure calculation API in `forecast/power_forecast.py` generates one
 power series and integrates only the requested interval or local calendar day.
