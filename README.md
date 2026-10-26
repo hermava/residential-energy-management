@@ -49,6 +49,21 @@ MQTT access for the MARSTEK battery must be requested from MARSTEK customer
 support through the smartphone app and enabled before the battery can be
 integrated. For direct customer support go to settings -> Help & Feedback --> Ask Marstek
 
+### Experimental Home Assistant OS app
+
+This branch also packages the existing manager as a locally built HA app for
+`aarch64` (including Green) and `amd64`. The default `run_manager: false` checks
+local configuration and exits without network requests or battery commands.
+Installation, check mode, the version 0.1.1 JSON-state import and an initial live
+cycle have been exercised on Green. HA access, MQTT status reception and target
+calculation worked; sustained control and live shutdown still need observation.
+Stop the existing service before importing state or enabling control in the app.
+
+See [App installation and operation](DOCS.md) and the German
+[container learning guide](docs/container-guide.md). Configuration and state are
+mounted outside the image; local secrets and historical measurements are excluded
+from the build context. No image publication is configured.
+
 ### Tested Hardware
 
 The MARSTEK battery integration has so far been tested only with a **MARSTEK

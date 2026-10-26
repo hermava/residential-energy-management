@@ -1,0 +1,17 @@
+# The build context is an allowlist, independent of Git's ignore rules.
+**
+!Dockerfile
+!.dockerignore
+!pyproject.toml
+!README.md
+!src/
+!src/**
+!scripts/
+!scripts/run_energy_manager.py
+!config/
+!config/sensors.example.yaml
+
+**/__pycache__/
+**/*.py[cod]
+**/.env
+**/*.env

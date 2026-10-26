@@ -1,0 +1,40 @@
+name: Residential Energy Manager
+version: "0.1.1"
+slug: residential_energy_manager
+description: Local MARSTEK energy management and advisory PV forecasts
+arch:
+  - aarch64
+  - amd64
+stage: experimental
+startup: application
+boot: manual
+init: true
+timeout: 60
+homeassistant_api: true
+map:
+  - type: app_config
+    read_only: false
+options:
+  run_manager: false
+  import_state: false
+  mqtt_host: ""
+  mqtt_port: 1883
+  mqtt_username: ""
+  mqtt_password: ""
+  marstek_device_type: ""
+  marstek_device_mac: ""
+  brightsky_timezone: Europe/Berlin
+  brightsky_max_distance_m: 50000
+schema:
+  run_manager: bool
+  import_state: bool
+  mqtt_host: str
+  mqtt_port: port
+  mqtt_username: str
+  mqtt_password: password
+  marstek_device_type: str
+  marstek_device_mac: str
+  brightsky_latitude: "float(-90,90)?"
+  brightsky_longitude: "float(-180,180)?"
+  brightsky_timezone: str
+  brightsky_max_distance_m: "int(0,)"

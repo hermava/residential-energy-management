@@ -1,0 +1,34 @@
+configuration:
+  import_state:
+    name: Bestehende Zustände importieren
+    description: "Einmalige Übernahme der JSON-Dateien aus state-import. Nur bei ausgeschaltetem Manager möglich; vorhandene abweichende Zustände werden nicht überschrieben. Danach wieder ausschalten."
+  run_manager:
+    name: Energie-Manager starten
+    description: "Aus: lokale Konfiguration prüfen und beenden. Ein: Manager mit Batterieregelung starten. Vorher den bisherigen Dienst stoppen."
+  mqtt_host:
+    name: MQTT-Broker
+    description: Hostname oder IP des bisherigen MARSTEK-Brokers.
+  mqtt_port:
+    name: MQTT-Port
+  mqtt_username:
+    name: MQTT-Benutzername
+  mqtt_password:
+    name: MQTT-Passwort
+  marstek_device_type:
+    name: MARSTEK-Gerätetyp
+    description: Den Wert aus der bisherigen lokalen Konfiguration übernehmen.
+  marstek_device_mac:
+    name: MARSTEK-Gerätekennung
+    description: Die bisher verwendete Gerätekennung unverändert übernehmen.
+  brightsky_latitude:
+    name: Breitengrad
+    description: Optional. Beide Koordinaten angeben, um die Wetterprognose zu aktivieren.
+  brightsky_longitude:
+    name: Längengrad
+    description: Optional. Beide Koordinaten angeben, um die Wetterprognose zu aktivieren.
+  brightsky_timezone:
+    name: Zeitzone
+    description: Beispielsweise Europe/Berlin.
+  brightsky_max_distance_m:
+    name: Maximaler Wetterstationsabstand
+    description: Suchradius in Metern.

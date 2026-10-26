@@ -30,3 +30,34 @@ jobs:
 
       - name: Compile Python files
         run: python -m compileall -q scripts src
+
+  app-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build local app image
+        run: docker build --tag residential-energy-manager:ci .
+
+      - name: Validate app configuration without network or hardware
+        shell: bash
+        run: |
+          mkdir -p /tmp/energy-manager-ci/config /tmp/energy-manager-ci/data
+          cp config/sensors.example.yaml /tmp/energy-manager-ci/config/sensors.yaml
+          cat > /tmp/energy-manager-ci/data/options.json <<'JSON'
+          {
+            "run_manager": false,
+            "mqtt_host": "broker.example",
+            "mqtt_port": 1883,
+            "mqtt_username": "ci-user",
+            "mqtt_password": "ci-placeholder",
+            "marstek_device_type": "ci-type",
+            "marstek_device_mac": "ci-device"
+          }
+          JSON
+          docker run --rm --init --network none \
+            --env SUPERVISOR_TOKEN=ci-placeholder \
+            --mount type=bind,source=/tmp/energy-manager-ci/config,target=/config \
+            --mount type=bind,source=/tmp/energy-manager-ci/data,target=/data \
+            residential-energy-manager:ci
