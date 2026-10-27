@@ -64,6 +64,11 @@ See [App installation and operation](DOCS.md) and the German
 mounted outside the image; local secrets and historical measurements are excluded
 from the build context. No image publication is configured.
 
+For offline analysis, the app's `export_logs` option copies measurement CSV files
+to its Samba-accessible configuration folder under `log-export/`. It runs once
+with the manager disabled and then exits. See the [export procedure](DOCS.md#export-measurement-csv-files-through-samba-version-030)
+for the options and steps to resume control afterwards.
+
 ### Tested Hardware
 
 The MARSTEK battery integration has so far been tested only with a **MARSTEK

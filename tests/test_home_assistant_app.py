@@ -164,6 +164,7 @@ def test_app_manifest_starts_in_check_mode_without_privileged_access():
     manifest = yaml.safe_load((ROOT / "config.yaml").read_text())
     assert manifest["options"]["run_manager"] is False
     assert manifest["options"]["import_state"] is False
+    assert manifest["options"]["export_logs"] is False
     assert manifest["options"]["debug_logging"] is False
     assert manifest["options"]["forecast_data_logging"] is True
     assert manifest["boot"] == "manual"
@@ -206,6 +207,63 @@ def test_import_mode_copies_state_and_exits_without_launching(configured_app, ca
     execute.assert_not_called()
     assert (path.parent / "marstek_recovery_state.json").read_text() == '{"active_until": null}'
     assert "State import complete" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("change", [
+    {"run_manager": True}, {"import_state": True}, {"export_logs": "true"},
+    {"export_logs": 1}, {"export_logs": None},
+])
+def test_export_rejects_conflicting_modes_and_non_boolean_flags(configured_app, change):
+    config, path, execute = configured_app
+    path.write_text(json.dumps({**options(), "export_logs": True, **change}))
+    assert app.main() == 1
+    assert not (config.parent / "log-export").exists()
+    execute.assert_not_called()
+
+
+def test_export_works_without_sensor_configuration_or_credentials_and_never_connects(
+    configured_app, monkeypatch, capsys,
+):
+    config, path, execute = configured_app
+    config.unlink()
+    path.write_text(json.dumps({"export_logs": True}))
+    monkeypatch.delenv("SUPERVISOR_TOKEN")
+    get, post, client = Mock(), Mock(), Mock()
+    monkeypatch.setattr("requests.get", get)
+    monkeypatch.setattr("requests.post", post)
+    monkeypatch.setattr("paho.mqtt.client.Client", client)
+    source = path.parent / "logs" / "forecast" / "pv_input_history_2026-10-27.csv"
+    source.parent.mkdir(parents=True)
+    source.write_text("timestamp,input_power_w\n2026-10-27T07:37:00+00:00,380\n")
+    assert app.main() == 0
+    copied = list((config.parent / "log-export").glob("*/logs/forecast/*.csv"))
+    assert len(copied) == 1
+    assert copied[0].read_bytes() == source.read_bytes()
+    assert not config.exists()
+    assert "Log export complete. Copied 1 CSV files" in capsys.readouterr().out
+    execute.assert_not_called()
+    get.assert_not_called()
+    post.assert_not_called()
+    client.assert_not_called()
+
+
+def test_export_failure_exits_without_launching_or_exposing_file_contents(
+    configured_app, monkeypatch, capsys,
+):
+    config, path, execute = configured_app
+    path.write_text(json.dumps({"export_logs": True}))
+    monkeypatch.setattr(app, "export_app_logs", Mock(side_effect=OSError("private-error-details")))
+    assert app.main() == 1
+    assert not (config.parent / "log-export").exists()
+    assert "private-error-details" not in capsys.readouterr().err
+    execute.assert_not_called()
+
+
+def test_export_option_has_translations_and_matches_manifest():
+    for language in ("de", "en"):
+        translation = yaml.safe_load((ROOT / "translations" / f"{language}.yaml").read_text())
+        assert translation["configuration"]["export_logs"]["name"]
+        assert translation["configuration"]["export_logs"]["description"]
 
 
 def test_existing_shutdown_handler_receives_sigterm_without_hardware(tmp_path):

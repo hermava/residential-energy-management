@@ -1,4 +1,7 @@
 configuration:
+  export_logs:
+    name: CSV-Messdaten exportieren
+    description: "Beim nächsten Start die vorhandenen Messdaten nach log-export im App-Konfigurationsordner kopieren und beenden. Über Samba zugänglich. Energie-Manager und Zustandsimport müssen ausgeschaltet sein. Danach Export wieder ausschalten."
   debug_logging:
     name: Ausführliche Diagnoseaufzeichnung
     description: "Für gezielte Fehlersuche: MARSTEK-Rohdaten, Forecast-Diagnosen und Konsolenwerte jedes Zyklus aufzeichnen. Standardmäßig aus."

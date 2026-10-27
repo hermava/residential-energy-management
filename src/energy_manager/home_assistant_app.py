@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 
+from energy_manager.app_log_export import LogExportError, export_app_logs
 from energy_manager.app_state_import import StateImportError, import_app_state
 from energy_manager.config_loader import load_config
 
@@ -96,10 +97,23 @@ def main() -> int:
             raise AppConfigurationError("App options must be a JSON object")
         run_manager = options.get("run_manager", False)
         import_state = options.get("import_state", False)
-        if type(run_manager) is not bool or type(import_state) is not bool:
-            raise AppConfigurationError("run_manager and import_state must be true or false")
+        export_logs = options.get("export_logs", False)
+        if any(type(flag) is not bool for flag in (run_manager, import_state, export_logs)):
+            raise AppConfigurationError(
+                "run_manager, import_state and export_logs must be true or false"
+            )
+        if export_logs and (run_manager or import_state):
+            raise AppConfigurationError(
+                "Log export requires run_manager: false and import_state: false"
+            )
         if run_manager and import_state:
             raise AppConfigurationError("State import requires run_manager: false")
+        if export_logs:
+            destination = SENSORS_PATH.parent / "log-export"
+            directory, count = export_app_logs(PRIVATE_DATA_PATH, destination)
+            print(f"Log export complete. Copied {count} CSV files to {directory}.")
+            print("Disable export_logs before enabling run_manager. No network requests made.")
+            return 0
         if not SENSORS_PATH.exists():
             SENSORS_PATH.parent.mkdir(parents=True, exist_ok=True)
             with TEMPLATE_PATH.open("rb") as source, SENSORS_PATH.open("xb") as target:
@@ -116,7 +130,7 @@ def main() -> int:
                 print("Imported recovery is pending. Review before enabling battery control.")
             print("Disable import_state before enabling run_manager. No network requests made.")
             return 0
-    except (AppConfigurationError, StateImportError) as error:
+    except (AppConfigurationError, StateImportError, LogExportError) as error:
         print(f"App configuration failed: {error}", file=sys.stderr)
         return 1
     except (OSError, ValueError, KeyError, TypeError, yaml.YAMLError) as error:

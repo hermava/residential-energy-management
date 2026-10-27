@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+- Add an offline `export_logs` option to copy measurement CSV files into the
+  Samba-accessible app configuration folder under `log-export/`.
+- Keep each export in a separate UTC-timestamped folder, including today's files
+  and legacy measurement CSV files stored directly in `/data`.
+- Export only while `run_manager` and `import_state` are disabled; exit afterwards
+  without network access or battery commands. The export does not require valid
+  sensor configuration or MQTT credentials.
+- Preserve original logs and previous exports. Do not copy options, state JSON,
+  environment files or analysis outputs; do not follow symlinks.
+
 ## 0.2.0
 
 ### Logging and storage policy change

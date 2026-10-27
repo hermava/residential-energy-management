@@ -139,6 +139,42 @@ The mounted data survives container replacement and app updates. Maintain backup
 uninstalling the app can remove its data. Options and backups can contain secrets.
 See the recording limits below before updating a large existing archive.
 
+## Export measurement CSV files through Samba (version 0.3.0)
+
+The measurement files live in the app's private `/data` mount, which Samba cannot
+access directly. The `export_logs` option copies them into the public app
+configuration folder. Install the updated source and app manifest first.
+
+1. Stop the app. Set `run_manager: false`, `import_state: false` and
+   `export_logs: true` in its Configuration tab, then save.
+2. Start once. The app copies existing CSV files and exits. The Log tab reports
+   `Log export complete`, the file count and the destination. A stopped app is
+   expected after a successful export. Battery control remains paused during this
+   operation; the old Pi service must remain stopped.
+3. Open Samba's `app_configs/local_residential_energy_manager/log-export/`
+   (older installations call the share `addon_configs`). Each successful export
+   has its own folder named with its UTC creation time and a unique suffix.
+4. Copy that folder to your computer. It contains `logs/forecast/` and
+   `logs/marstek/` where available; legacy measurement CSV files remain at the
+   export folder's root. Today's files are included up to the stopped manager's
+   last recorded measurement. Missing or disabled recordings are not recreated.
+5. Set `export_logs: false` and `run_manager: true`, keep `import_state: false`,
+   save and start the app again to resume battery control.
+
+The export runs locally without HA, MQTT or weather access, and does not require
+valid sensor configuration or credentials. It copies recognized CSV files directly
+from `/data/logs/forecast/` and `/data/logs/marstek/`, plus legacy root-level files
+matching `pv_input_history_*.csv`, `brightsky_forecast_*.csv`,
+`energy_forecast_*.csv`, `marstek_*.csv` or `*_marstek_*.csv`.
+It excludes options, JSON state, environment files, analysis and previous exports.
+Source files and previous exports are preserved; symlinks are rejected. A failed
+copy is not published as a completed export.
+
+Exports consume additional disk space and are not covered by CSV recording
+budgets. After copying them to your computer, remove unneeded export folders
+through Samba. Diagnostic CSV files can include device identifiers and household
+usage information; review them before sharing publicly.
+
 ## Development data and disk limits (version 0.2.0)
 
 The default profile is `forecast_data_logging: true` and `debug_logging: false`.

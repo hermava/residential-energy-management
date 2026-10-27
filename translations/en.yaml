@@ -1,4 +1,7 @@
 configuration:
+  export_logs:
+    name: Export measurement CSV files
+    description: "On the next start, copy existing measurements to log-export in the app configuration folder and exit. Accessible through Samba. Disable the manager and state import first. Turn export off afterwards."
   debug_logging:
     name: Detailed diagnostic logging
     description: "Record MARSTEK raw data, forecast diagnostics and per-cycle console values for targeted troubleshooting. Off by default."

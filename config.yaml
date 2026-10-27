@@ -1,5 +1,5 @@
 name: Residential Energy Manager
-version: "0.2.0"
+version: "0.3.0"
 breaking_versions:
   - "0.2.0"
 slug: residential_energy_manager
@@ -19,6 +19,7 @@ map:
 options:
   run_manager: false
   import_state: false
+  export_logs: false
   debug_logging: false
   forecast_data_logging: true
   forecast_log_max_mib: 200
@@ -34,6 +35,7 @@ options:
 schema:
   run_manager: bool
   import_state: bool
+  export_logs: bool
   debug_logging: bool
   forecast_data_logging: bool
   forecast_log_max_mib: "int(1,10240)"
