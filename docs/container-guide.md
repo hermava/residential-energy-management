@@ -287,6 +287,43 @@ Messwerte und einen berechneten Sollwert. Dies belegt noch keine bestätigte
 Stellwertübernahme und keinen Langzeittest. Deployment und Aktivierung wurden
 vom Nutzer vorgenommen.
 
+## Ergänzung: Schlanke Aufzeichnung in Version 0.2.0
+
+Nachdem der Manager auf der Green stabil läuft, konzentriert sich die normale
+Datensammlung auf die Forecast-Entwicklung. Zwei App-Optionen trennen die Aufgaben:
+
+- `forecast_data_logging: true` sammelt die kompakte PV-Eingangsleistung und
+  archivierte Wettervorhersagen. Die Auflösung der Messungen bleibt erhalten.
+- `debug_logging: false` schaltet die ausführlichen Rohdaten- und Forecast-CSV
+  sowie die Konsolenwerte jedes Regelzyklus standardmäßig aus. Fehler und bereits
+  vorhandene Kontroll-/Recovery-Ereignismeldungen bleiben sichtbar.
+
+Der App-Starter übergibt diese Einstellungen als Umgebungsvariablen an den neuen
+Managerprozess. Erst dieser Prozess importiert die Parameter für den laufenden
+Betrieb. Die App muss nach einer Optionsänderung neu gestartet werden; Python
+liest die Werte nicht bei jedem Messpunkt erneut ein. Standalone bleibt der
+frühere Debug-Standard für bestehende Installationen erhalten.
+
+PV- und Wetter-CSV teilen sich standardmäßig 200 MiB. Diagnosen dürfen getrennt
+in jedem ihrer beiden Ordner 10 MiB belegen. Die App bereinigt nur eindeutig
+zugehörige CSV-Dateien, beginnend mit dem ältesten abgeschlossenen UTC-Tag.
+JSON-Zustände und heutige Dateien werden nicht dafür gelöscht. Bei vollem Budget
+pausiert die Aufzeichnung, während Berechnung und Regelung weiterlaufen.
+
+Dateigrößen werden zwischengespeichert und bei eigenen Schreibvorgängen mitgezählt.
+Ein erneutes Einlesen des Verzeichnisses erfolgt alle fünf Minuten beziehungsweise
+beim UTC-Tageswechsel. So müssen nicht bei jedem PV-Messpunkt sämtliche alten
+Dateien erneut abgefragt werden. Externe Dateiänderungen werden erst beim nächsten
+Einlesen berücksichtigt. Ist eine Kategorie ausgeschaltet, bleiben ihre bisherigen
+Dateien erhalten; die Bereinigung ist an weitere Aufzeichnungen gebunden.
+
+Diese Grenzen betreffen die verwalteten CSV-Dateien, nicht den gesamten Speicher
+der Green oder die vom Containerdienst verwalteten Konsolenlogs. Für Daten über
+die Aufbewahrungsgrenze hinaus ist eine externe Archivierung nötig; es gibt
+keinen automatischen Export. Die neue Aufbewahrung ist deshalb im Changelog
+als bewusste Update-Entscheidung gekennzeichnet. Kein laufendes Gerät wurde durch
+diese Implementierung aktualisiert oder neu gestartet.
+
 ## Weiterführende Primärquellen
 
 - [Docker: Container ausführen](https://docs.docker.com/engine/containers/run/)

@@ -1,30 +1,55 @@
-# Structural extraction from run_energy_manager.py (V5).
-# Keep behavior/settings unchanged; see REFACTORING_NOTES.md.
+"""Write optional diagnostics and bounded forecast training CSV data."""
 import csv
+import io
 import json
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from energy_manager import settings
 from energy_manager.adapters.marstek_mqtt import MarstekStatus
-from energy_manager.settings import LOG_PATH, LOG_RETENTION_DAYS, PV_INPUT_ARCHIVE_PATH
+from energy_manager.log_storage import append_with_budget
+from energy_manager.settings import (
+    BRIGHTSKY_FORECAST_LOG_PATH,
+    FORECAST_DAILY_LOG_PATH,
+    FORECAST_LOG_PATH,
+    LOG_PATH,
+    LOG_RETENTION_DAYS,
+    PV_INPUT_ARCHIVE_PATH,
+)
 
 
 def append_csv_row(
     row: dict, timestamp: datetime, base_path: Path, retention_days: int | None = None,
+    *, category: str = "debug",
 ) -> None:
     if not settings.CSV_LOGGING_ENABLED:
         return
+    if category not in ("debug", "forecast"):
+        raise ValueError("CSV category must be debug or forecast")
+    enabled = (settings.FORECAST_DATA_LOGGING_ENABLED if category == "forecast"
+               else settings.DEBUG_LOGGING_ENABLED)
+    if not enabled:
+        return
+    maximum_bytes = (settings.FORECAST_LOG_BUDGET_BYTES if category == "forecast"
+                     else settings.DEBUG_LOG_BUDGET_BYTES)
+    bases = ((PV_INPUT_ARCHIVE_PATH, BRIGHTSKY_FORECAST_LOG_PATH) if category == "forecast"
+             else (LOG_PATH, FORECAST_LOG_PATH, FORECAST_DAILY_LOG_PATH))
+    group = tuple(sorted({base_path, *(base for base in bases if base.parent == base_path.parent)}))
     log_path = base_path.with_name(f"{base_path.stem}_{timestamp:%Y-%m-%d}{base_path.suffix}")
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    file_exists = log_path.exists()
+    try:
+        existing_size = log_path.stat().st_size
+    except FileNotFoundError:
+        existing_size = None
+    file_exists = existing_size is not None
     if not file_exists and retention_days is not None:
         _remove_old_csv_files(base_path, timestamp.date(), retention_days)
-    with log_path.open("a", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=row.keys())
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(row)
+    content = io.StringIO(newline="")
+    writer = csv.DictWriter(content, fieldnames=row.keys())
+    if not existing_size:
+        writer.writeheader()
+    writer.writerow(row)
+    append_with_budget(log_path, content.getvalue().encode("utf-8"), group,
+                       timestamp.date(), maximum_bytes)
 
 
 def _remove_old_csv_files(base_path: Path, today: date, retention_days: int) -> None:
@@ -53,6 +78,15 @@ def _append_marstek_log(
     if not settings.CSV_LOGGING_ENABLED:
         return
     battery = status.battery_state
+    try:
+        append_csv_row(
+            {"timestamp": status.received_at.isoformat(), "input_power_w": battery.input_power_w},
+            status.received_at, PV_INPUT_ARCHIVE_PATH, category="forecast",
+        )
+    except OSError as exc:
+        print(f"PV input archive failed: {exc}")
+    if not settings.DEBUG_LOGGING_ENABLED:
+        return
     raw = status.raw_values
     row = {
         "timestamp": status.received_at.isoformat(),
@@ -98,11 +132,7 @@ def _append_marstek_log(
         "recovery_event": recovery_info["recovery_event"],
         "recovery_restore_target_w": recovery_info["recovery_restore_target_w"],
     }
-    append_csv_row(row, datetime.now(UTC), LOG_PATH, retention_days=LOG_RETENTION_DAYS)
     try:
-        append_csv_row(
-            {"timestamp": status.received_at.isoformat(), "input_power_w": battery.input_power_w},
-            status.received_at, PV_INPUT_ARCHIVE_PATH,
-        )
+        append_csv_row(row, datetime.now(UTC), LOG_PATH, retention_days=LOG_RETENTION_DAYS)
     except OSError as exc:
-        print(f"PV input archive failed: {exc}")
+        print(f"MARSTEK diagnostic logging failed: {exc}")

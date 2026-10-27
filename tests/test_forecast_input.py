@@ -115,7 +115,10 @@ def test_brightsky_collection_respects_hourly_interval(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("csv_enabled", [True, False])
-def test_brightsky_collection_keeps_forecasts_and_json_state(monkeypatch, tmp_path, csv_enabled):
+@pytest.mark.parametrize("forecast_data_enabled", [True, False])
+def test_brightsky_collection_keeps_forecasts_and_json_state(
+    monkeypatch, tmp_path, csv_enabled, forecast_data_enabled,
+):
     now = datetime.fromisoformat("2026-10-19T08:30:00+02:00")
     tomorrow = datetime.fromisoformat("2026-10-20T00:00:00+02:00")
     points = [BrightSkyForecastPoint(
@@ -124,6 +127,8 @@ def test_brightsky_collection_keeps_forecasts_and_json_state(monkeypatch, tmp_pa
         sunshine_seconds=900.0, solar_irradiation_j_m2=100000.0, cloud_cover_percent=5.0,
     ) for hour in range(1, 25)]
     monkeypatch.setattr(settings, "CSV_LOGGING_ENABLED", csv_enabled)
+    monkeypatch.setattr(settings, "FORECAST_DATA_LOGGING_ENABLED", forecast_data_enabled)
+    monkeypatch.setattr(settings, "DEBUG_LOGGING_ENABLED", False)
     collect = Mock(return_value=points)
     monkeypatch.setattr(forecast_data_collection, "collect_brightsky_forecast", collect)
     monkeypatch.setattr(
@@ -146,8 +151,9 @@ def test_brightsky_collection_keeps_forecasts_and_json_state(monkeypatch, tmp_pa
     saved = json.loads(state_path.read_text())
     assert saved["daily_predictions"]["2026-10-20"]["estimated_input_wh"] == estimate
     assert "brightsky_forecast_last_success" in state
-    assert (tmp_path / "logs").exists() is csv_enabled
-    assert bool(list(tmp_path.rglob("*.csv"))) is csv_enabled
+    expected_csv = csv_enabled and forecast_data_enabled
+    assert (tmp_path / "logs").exists() is expected_csv
+    assert bool(list(tmp_path.rglob("*.csv"))) is expected_csv
 
 
 def test_brightsky_daily_estimates_group_tomorrow_and_day_after(monkeypatch):

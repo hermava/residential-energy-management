@@ -1,4 +1,16 @@
 configuration:
+  debug_logging:
+    name: Detailed diagnostic logging
+    description: "Record MARSTEK raw data, forecast diagnostics and per-cycle console values for targeted troubleshooting. Off by default."
+  forecast_data_logging:
+    name: Collect forecast development data
+    description: "Record compact PV input measurements and archived weather forecasts, independently of diagnostic logging."
+  forecast_log_max_mib:
+    name: Forecast storage budget (MiB)
+    description: "Shared budget for PV and weather CSV files. Oldest closed daily files are removed. Today's files remain; recording pauses when they fill the budget."
+  debug_log_max_mib:
+    name: Diagnostic storage budget per directory (MiB)
+    description: "Applies separately to marstek and forecast directories. Oldest closed diagnostic CSV files are removed while diagnostic recording is enabled."
   import_state:
     name: Import existing state
     description: "One-time import of JSON files from state-import, with the manager disabled. Different existing state is never overwritten. Turn this off after importing."

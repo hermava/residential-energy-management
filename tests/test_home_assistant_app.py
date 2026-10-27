@@ -52,6 +52,10 @@ def test_app_options_adapt_to_existing_environment_without_mutating_it(monkeypat
     assert environment["MARSTEK_DEVICE_MAC"] == "example-device"
     assert environment["BRIGHTSKY_LATITUDE"] == environment["BRIGHTSKY_LONGITUDE"] == ""
     assert environment["TZ"] == "Europe/Berlin"
+    assert environment["ENERGY_MANAGER_DEBUG_LOGGING"] == "false"
+    assert environment["ENERGY_MANAGER_FORECAST_DATA_LOGGING"] == "true"
+    assert environment["ENERGY_MANAGER_FORECAST_LOG_MAX_MIB"] == "200"
+    assert environment["ENERGY_MANAGER_DEBUG_LOG_MAX_MIB"] == "10"
     assert os.environ["HOME_ASSISTANT_TOKEN"] == "original-token"
 
 
@@ -73,6 +77,9 @@ def test_zero_coordinates_are_valid_and_optional_forecast_settings_are_exported(
     {"brightsky_latitude": 49, "brightsky_longitude": 181},
     {"brightsky_latitude": True, "brightsky_longitude": 9},
     {"brightsky_max_distance_m": -1}, {"brightsky_timezone": "invalid/timezone"},
+    {"debug_logging": "false"}, {"forecast_data_logging": None},
+    {"forecast_log_max_mib": 0}, {"forecast_log_max_mib": 10241},
+    {"debug_log_max_mib": True},
 ])
 def test_invalid_options_are_rejected_without_leaking_values(change):
     with pytest.raises(app.AppConfigurationError) as error:
@@ -157,6 +164,8 @@ def test_app_manifest_starts_in_check_mode_without_privileged_access():
     manifest = yaml.safe_load((ROOT / "config.yaml").read_text())
     assert manifest["options"]["run_manager"] is False
     assert manifest["options"]["import_state"] is False
+    assert manifest["options"]["debug_logging"] is False
+    assert manifest["options"]["forecast_data_logging"] is True
     assert manifest["boot"] == "manual"
     assert manifest["init"] is True
     assert manifest["homeassistant_api"] is True
@@ -165,6 +174,18 @@ def test_app_manifest_starts_in_check_mode_without_privileged_access():
     assert not any(manifest.get(key) for key in (
         "host_network", "privileged", "full_access", "docker_api", "hassio_api", "ports",
     ))
+
+
+def test_logging_options_are_applied_before_fresh_manager_imports_settings():
+    environment = dict(os.environ, **app.app_environment(options(), "example-token"))
+    code = (
+        "from energy_manager import settings; "
+        "assert settings.DEBUG_LOGGING_ENABLED is False; "
+        "assert settings.FORECAST_DATA_LOGGING_ENABLED is True; "
+        "assert settings.FORECAST_LOG_BUDGET_BYTES == 200 * 1024 * 1024; "
+        "assert settings.DEBUG_LOG_BUDGET_BYTES == 10 * 1024 * 1024"
+    )
+    subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=environment, check=True)
 
 
 def test_import_is_only_permitted_with_the_manager_disabled(configured_app, capsys):

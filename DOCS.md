@@ -19,7 +19,7 @@ This is a manual installation procedure, not an automatic deployment.
    installations expose this as `addons` or `/addons`.
 2. Copy this repository into one app directory, for example
    `local_apps/residential_energy_manager/`. `config.yaml`, `Dockerfile`,
-   `pyproject.toml`, `README.md`, `DOCS.md`, `.dockerignore`, `src/`,
+   `pyproject.toml`, `README.md`, `DOCS.md`, `CHANGELOG.md`, `.dockerignore`, `src/`,
    `scripts/run_energy_manager.py`, `config/sensors.example.yaml` and
    `translations/` belong there. Do not copy `.env`, `.git`, `.venv`, local
    `config/sensors.yaml` or `data/` into this source directory.
@@ -131,13 +131,47 @@ actively controlling the battery.
 | `/config/sensors.yaml` | Your sensor and battery configuration | User |
 | `/data/options.json` | App options, including credentials | HA Supervisor |
 | `/data/*.json` | Recovery, daily energy and forecast state | Manager |
-| `/data/logs/` | Diagnostic CSV and permanent PV/weather archives | Manager |
+| `/data/logs/` | Bounded diagnostic CSV and PV/weather development data | Manager |
 
 The image links `/app/config` to `/config` and `/app/data` to `/data`. This preserves
 the existing relative Python paths without changing the control modules.
 The mounted data survives container replacement and app updates. Maintain backups;
 uninstalling the app can remove its data. Options and backups can contain secrets.
-Permanent PV/weather archives still have no automatic retention limit.
+See the recording limits below before updating a large existing archive.
+
+## Development data and disk limits (version 0.2.0)
+
+The default profile is `forecast_data_logging: true` and `debug_logging: false`.
+It keeps the original PV measurement resolution and hourly archived weather
+retrievals, while skipping full MARSTEK CSV, minute-by-minute diagnostic CSV and
+routine per-cycle console values. Errors and existing control/recovery event
+messages remain visible. The app can therefore run quietly while HA values update.
+
+`forecast_log_max_mib` defaults to 200 MiB shared by the PV and Bright Sky CSV
+families. `debug_log_max_mib` defaults to 10 MiB separately for diagnostic files
+in each of the two log directories (20 MiB combined). Budgets are configurable
+from 1 to 10240 MiB. These limits cover managed CSV only, not total HA storage.
+
+While recording, the writer removes the oldest completed UTC-day files as needed.
+Today's files are never deleted or truncated to make room; recording pauses if
+they fill the budget. Future-dated files are also protected. With external file
+changes or a newly lowered budget, protected existing data can exceed the limit;
+new writes pause until room becomes available. External changes are reconciled
+at least every five minutes when writing continues. Disabled categories retain
+their existing files and do not prune. JSON states, credentials, import copies,
+analysis exports and unrelated/legacy filename families are excluded.
+
+This replaces the previous unbounded PV/weather archive policy. Export training
+data to your laptop before old files expire. No automatic export is implemented.
+The release is marked as a breaking version to prevent an unattended update from
+silently changing archive retention. Updating the app does not itself start
+recording or prune data; cleanup begins when its manager writes enabled CSV.
+
+Debug recording is intended for targeted troubleshooting. Enabling it restores
+the existing diagnostic columns and per-cycle console values. Console rotation
+is managed by HA/container infrastructure, separately from these CSV limits.
+Recovery, daily energy and forecast-state persistence, forecast calculation and
+HA publication continue independently of both recording toggles.
 
 To update a locally built app, copy the changed source files into its local app
 directory, increment `version` in `config.yaml`, reload the app store and install

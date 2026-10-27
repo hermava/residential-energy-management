@@ -108,6 +108,18 @@ def test_forecast_uses_sunset_correction_and_configured_output(
     assert row["correction_status"] == "not_applied_brightsky_model"
 
 
+def test_disabling_debug_logging_preserves_forecast_calculation_and_publication(
+    setup_forecast, monkeypatch,
+):
+    _, config, _, ha, battery, path = setup_forecast
+    monkeypatch.setattr(settings, "DEBUG_LOGGING_ENABLED", False)
+    state = {}
+    daily_forecast.update_daily_forecast(ha, config, battery, state)
+    assert state["daily_forecast"] is not None
+    ha.publish_state.assert_called()
+    assert not list(path.glob("*.csv"))
+
+
 def test_tomorrow_and_day_after_ampels_publish_when_outputs_are_configured(setup_forecast):
     now, config, _, ha, battery, _ = setup_forecast
     config = replace(config, outputs={

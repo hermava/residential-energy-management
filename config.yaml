@@ -1,5 +1,7 @@
 name: Residential Energy Manager
-version: "0.1.1"
+version: "0.2.0"
+breaking_versions:
+  - "0.2.0"
 slug: residential_energy_manager
 description: Local MARSTEK energy management and advisory PV forecasts
 arch:
@@ -17,6 +19,10 @@ map:
 options:
   run_manager: false
   import_state: false
+  debug_logging: false
+  forecast_data_logging: true
+  forecast_log_max_mib: 200
+  debug_log_max_mib: 10
   mqtt_host: ""
   mqtt_port: 1883
   mqtt_username: ""
@@ -28,6 +34,10 @@ options:
 schema:
   run_manager: bool
   import_state: bool
+  debug_logging: bool
+  forecast_data_logging: bool
+  forecast_log_max_mib: "int(1,10240)"
+  debug_log_max_mib: "int(1,10240)"
   mqtt_host: str
   mqtt_port: port
   mqtt_username: str

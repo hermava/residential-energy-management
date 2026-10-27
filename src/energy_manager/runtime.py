@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 import requests
 
+from energy_manager import settings
 from energy_manager.adapters.home_assistant import HomeAssistantAdapter
 from energy_manager.adapters.marstek_mqtt import MarstekMqttAdapter
 from energy_manager.battery_control import _apply_marstek_control, _get_marstek_status
@@ -33,6 +34,8 @@ from energy_manager.settings import OSC_MAX_INPUT_RANGE_W
 
 
 def _print_cycle_status(load_estimate, battery_state, target_power_w: float) -> None:
+    if not settings.DEBUG_LOGGING_ENABLED:
+        return
     print(f"Load: {load_estimate.total_power_w:.1f} W")
     if battery_state is None:
         print("Battery state: unavailable")

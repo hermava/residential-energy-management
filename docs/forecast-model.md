@@ -167,15 +167,24 @@ Diese Präzisierung betrifft ausschließlich die Offline-Auswertung.
 
 ## Langfristige Datensammlung
 
-Unter `data/logs/forecast/` bleiben Bright-Sky-Prognoseabrufe und die kompakte
-`pv_input_history_YYYY-MM-DD.csv` dauerhaft erhalten. Letztere speichert bei jedem
+Unter `data/logs/forecast/` werden Bright-Sky-Prognoseabrufe und die kompakte
+`pv_input_history_YYYY-MM-DD.csv` gesammelt. Letztere speichert bei jedem
 empfangenen Marstek-Status nur UTC-Zeitstempel und gemessene Eingangsleistung.
 Dadurch können Stundenpaare später neu gebildet werden; auch kurze Schattenübergänge
 bleiben zeitlich erkennbar. Ausführliche Diagnosen liegen separat unter
-`data/logs/marstek/` und behalten ihre Aufbewahrung von zehn Tagen.
+`data/logs/marstek/`. Sie sind in der HA-App standardmäßig ausgeschaltet und
+behalten bei Aktivierung ihre zusätzliche Altersgrenze von zehn Tagen.
 
-`CSV_LOGGING_ENABLED` muss während der Sammlung eingeschaltet bleiben. Die
-permanenten Archive wachsen ohne automatische Löschung. Die Analyse findet
+Ab App-Version 0.2.0 steuern `forecast_data_logging` und `debug_logging` die
+Aufzeichnungen unabhängig voneinander. Die kompakten PV- und Wetterdaten sind
+standardmäßig aktiv und teilen sich 200 MiB Speicherbudget. Älteste abgeschlossene
+UTC-Tagesdateien werden bei Bedarf gelöscht; heutige Dateien bleiben geschützt.
+Ist für sie kein Platz mehr, pausiert die Aufzeichnung. Für langfristige oder
+jahreszeitliche Modellvergleiche müssen Daten vor ihrer Löschung extern archiviert
+werden. Es gibt keinen automatischen Export. Der bisherige Quellcode-Hauptschalter
+`CSV_LOGGING_ENABLED` muss für beide CSV-Kategorien eingeschaltet bleiben.
+Die Messauflösung, Forecast-Berechnung und JSON-Zustände werden nicht verändert.
+Die Analyse findet
 sowohl die neue Ordnerstruktur als auch alte Dateien direkt unter `data/`.
 Überlappende identische Messungen werden nicht doppelt integriert.
 

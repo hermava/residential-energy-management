@@ -429,7 +429,7 @@ def update_forecast_logging(
     battery_state: BatteryState | None,
     state: dict,
 ) -> None:
-    if not settings.CSV_LOGGING_ENABLED:
+    if not settings.CSV_LOGGING_ENABLED or not settings.DEBUG_LOGGING_ENABLED:
         return
     now = time.monotonic()
     last_log_at = state.get("last_log_at")
@@ -462,7 +462,7 @@ def update_brightsky_forecast_collection(
         row = asdict(point)
         row["retrieved_at"] = point.retrieved_at.isoformat()
         row["forecast_at"] = point.forecast_at.isoformat()
-        append_csv_row(row, point.retrieved_at, BRIGHTSKY_FORECAST_LOG_PATH)
+        append_csv_row(row, point.retrieved_at, BRIGHTSKY_FORECAST_LOG_PATH, category="forecast")
     retrieved_at = points[0].retrieved_at if points else datetime.now(UTC)
     state["bright_sky_points"] = points
     state["bright_sky_daily_forecasts"] = _daily_brightsky_forecasts(

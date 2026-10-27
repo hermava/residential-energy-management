@@ -1,4 +1,16 @@
 configuration:
+  debug_logging:
+    name: Ausführliche Diagnoseaufzeichnung
+    description: "Für gezielte Fehlersuche: MARSTEK-Rohdaten, Forecast-Diagnosen und Konsolenwerte jedes Zyklus aufzeichnen. Standardmäßig aus."
+  forecast_data_logging:
+    name: Daten für Forecast-Entwicklung sammeln
+    description: "Kompakte PV-Eingangsleistung und archivierte Wettervorhersagen sammeln. Unabhängig von der Diagnoseaufzeichnung."
+  forecast_log_max_mib:
+    name: Forecast-Speicherbudget (MiB)
+    description: "Gemeinsames Budget für PV- und Wetter-CSV. Älteste abgeschlossene Tagesdateien werden entfernt. Heutige Dateien bleiben erhalten; bei vollem Budget pausiert die Aufzeichnung."
+  debug_log_max_mib:
+    name: Diagnose-Speicherbudget je Ordner (MiB)
+    description: "Gilt getrennt für die Ordner marstek und forecast. Bei aktiver Diagnoseaufzeichnung werden die ältesten abgeschlossenen Diagnose-CSV entfernt."
   import_state:
     name: Bestehende Zustände importieren
     description: "Einmalige Übernahme der JSON-Dateien aus state-import. Nur bei ausgeschaltetem Manager möglich; vorhandene abweichende Zustände werden nicht überschrieben. Danach wieder ausschalten."

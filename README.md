@@ -367,27 +367,54 @@ Missing, invalid or stale readings and intervals longer than 30 seconds are not 
 
 ## Logs
 
-Set `CSV_LOGGING_ENABLED = False` in `src/energy_manager/settings.py` to disable
-diagnostic CSV recording; the default is `True`. The setting takes effect on the
-next application start and covers MARSTEK status, forecast input history, daily
-forecast results and Bright Sky forecast CSV files. Existing files are retained.
-Battery control, recovery, in-memory input history, forecast calculation and
-Home Assistant publication continue. JSON persistence for recovery, daily energy
-and forecast comparisons remains active, as do console/service messages.
-Disabled periods leave gaps in the data available for diagnostics and offline
-calibration; they are not backfilled.
+The HA app has two independent recording options:
 
-Runtime CSV files share the writer in `src/energy_manager/csv_logging.py`.
-MARSTEK status files retain their existing `LOG_RETENTION_DAYS` cleanup when a
-new daily file is created; forecast CSV files are not automatically deleted.
+| App option | Default | Records |
+| --- | --- | --- |
+| `forecast_data_logging` | `true` | Timestamp and PV input power for each received status; archived Bright Sky forecasts |
+| `debug_logging` | `false` | Full MARSTEK diagnostics, input snapshots, daily forecast diagnostics and per-cycle console values |
+| `forecast_log_max_mib` | `200` | Shared PV/weather CSV budget |
+| `debug_log_max_mib` | `10` | Diagnostic CSV budget per directory: `marstek` and `forecast` |
 
-Daily MARSTEK diagnostics are written to `data/logs/marstek/`. Forecast files
-are written to `data/logs/forecast/`. Alongside the diagnostics, every received
-MARSTEK status records just its timestamp and PV input power in
-`pv_input_history_YYYY-MM-DD.csv`. This compact history has no automatic deletion;
-it preserves measurements for later hourly integration and shading analysis
-after the detailed diagnostics have expired. Bright Sky forecast snapshots are
-also retained. Both recordings follow `CSV_LOGGING_ENABLED`.
+At the default app settings only the compact data needed for model fitting,
+lead-time evaluation and shading analysis is collected. Measurement resolution
+and valid zero values are unchanged. Console startup, shutdown, errors and existing
+recovery/control event messages remain enabled. Quiet console output is normal.
+Changes take effect on the next app start.
+
+While a category is recording, its oldest completed UTC-day CSV files are removed
+when necessary to fit the next row into the budget. Today's files and future-dated
+files are protected; if they leave insufficient room, recording pauses with a
+console message. This can create gaps for offline analysis. There is no automatic
+export or backfill: archive valuable data off the Green before it expires.
+The budget covers only matching, currently configured CSV filename families.
+JSON state, unrelated files, legacy prefixes, analysis exports and disabled
+categories are not deleted. Lowering a budget below already protected data pauses
+new writes; it does not truncate those files.
+
+Storage accounting is cached and updated for each successful append, with a
+rescan every five minutes or on UTC-day changes. The limit applies to this
+process's managed writes; externally copied or edited CSV files are reconciled
+on the next rescan. MARSTEK's existing `LOG_RETENTION_DAYS` cleanup also applies
+when a new diagnostic daily file is created. Diagnostic budgets apply separately
+in the two directories, so their default combined allowance is 20 MiB.
+
+All CSV files share `csv_logging.py` and its bounded writer. Standalone settings
+retain debug-on compatibility; the HA starter exports the selected flags and
+budgets through `ENERGY_MANAGER_DEBUG_LOGGING`,
+`ENERGY_MANAGER_FORECAST_DATA_LOGGING`, `ENERGY_MANAGER_FORECAST_LOG_MAX_MIB`
+and `ENERGY_MANAGER_DEBUG_LOG_MAX_MIB` before starting Python. Process environment
+values must be set before importing settings. The existing source-level master
+switch `CSV_LOGGING_ENABLED = False` still disables both CSV categories.
+
+Recording choices do not disable battery control, forecast calculations, in-memory
+input history or HA publication. Recovery, energy-counter and forecast-comparison
+JSON persistence remains active. Disabled recording leaves gaps without backfill.
+
+Detailed MARSTEK files remain under `data/logs/marstek/`; forecast files remain
+under `data/logs/forecast/`. The compact `pv_input_history_YYYY-MM-DD.csv` stores
+just timestamp and PV input power. Bright Sky archives preserve all retrieval
+versions for later horizon comparisons, subject to the shared budget.
 
 Existing local CSV files can be organized and V5 input measurements preserved
 with the following offline command. Run it with the manager stopped or on an
@@ -406,7 +433,7 @@ readable by the analysis tool even before organization.
 
 | Daily file in `data/logs/forecast/` | Contents |
 | --- | --- |
-| `pv_input_history_YYYY-MM-DD.csv` | Permanent timestamp and measured PV input power, without diagnostic payloads |
+| `pv_input_history_YYYY-MM-DD.csv` | Timestamp and measured PV input power, subject to the forecast storage budget |
 | `energy_forecast_history_YYYY-MM-DD.csv` | Battery, solar forecast and weather snapshots |
 | `energy_forecast_daily_v2_YYYY-MM-DD.csv` | Earlier daily balance schema |
 | `energy_forecast_daily_v3_YYYY-MM-DD.csv` | Earlier daily forecast logs; affected versions could overwrite today's result with a later day's estimate |

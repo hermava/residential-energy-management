@@ -34,13 +34,13 @@ def estimate_consumer_power(
     config: EstimatedConsumerConfig,
 ) -> float:
     normalized_state = state.state.strip().lower()
-    if normalized_state == "on" or normalized_state == "running" or normalized_state == "run":
+    if normalized_state in {"on", "running", "run"}:
         return config.estimated_power_w
-    if normalized_state == "off" or normalized_state == "idle" or normalized_state == "ready":
+    if normalized_state in {"off", "idle", "ready", "finished"}:
         return 0.0
     raise InvalidMeasurementError(
         f"Unsupported state for {state.source}: {state.state}"
-)
+    )
 
 def measurement_to_contribution(
     measurement: PowerMeasurement,

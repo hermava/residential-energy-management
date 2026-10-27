@@ -31,6 +31,21 @@ def _text(options: dict, key: str, default: str = "") -> str:
     return value
 
 
+def _logging_environment(options: dict) -> dict[str, str]:
+    environment = {}
+    for key, default in (("debug_logging", False), ("forecast_data_logging", True)):
+        value = options.get(key, default)
+        if type(value) is not bool:
+            raise AppConfigurationError(f"App option {key} must be true or false")
+        environment[f"ENERGY_MANAGER_{key.upper()}"] = str(value).lower()
+    for key, default in (("forecast_log_max_mib", 200), ("debug_log_max_mib", 10)):
+        value = options.get(key, default)
+        if type(value) is not int or not 1 <= value <= 10240:
+            raise AppConfigurationError(f"App option {key} must be between 1 and 10240 MiB")
+        environment[f"ENERGY_MANAGER_{key.upper()}"] = str(value)
+    return environment
+
+
 def app_environment(options: dict, supervisor_token: str) -> dict[str, str]:
     """Validate local options without contacting HA, MQTT, weather services or the battery."""
     if not supervisor_token:
@@ -70,6 +85,7 @@ def app_environment(options: dict, supervisor_token: str) -> dict[str, str]:
         ) from error
     environment["BRIGHTSKY_TIMEZONE"] = timezone
     environment["TZ"] = timezone
+    environment.update(_logging_environment(options))
     return environment
 
 
