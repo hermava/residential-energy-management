@@ -2,9 +2,11 @@
 
 Diese Anleitung erklärt die erste App-Version dieses Projekts. Sie richtet sich
 an jemanden, der Python kennt und Container anhand des eigenen Projekts lernen
-möchte. Der Code liegt auf `feat/home-assistant-app`. Installation, Zustandsimport
-und ein erster Betriebszyklus auf der Green wurden am 26.10.2026 vom Nutzer
-bestätigt. Dauerbetrieb und tatsächliche Stellwertübernahme sind noch zu beobachten.
+möchte. Installation und Zustandsimport auf der Green wurden am 26.10.2026
+bestätigt. Seitdem wurden auch der laufende Betrieb, die Logging-Optionen und der
+CSV-Export erprobt; am 30.10.2026 hat der Projektbetreiber die App-Erprobung als
+ausreichend für die Übernahme in den Hauptbranch bestätigt. Stromausfall-Recovery
+und andere Batteriehardware bleiben gesondert zu prüfen.
 
 ## 1. Welche Aufgabe löst der Container?
 
@@ -204,8 +206,8 @@ Signalhandler behandelt das wie eine kontrollierte Unterbrechung und kann bei
 aktiver Recovery den bisherigen Abbruchpfad aufrufen. HA wartet in dieser Version
 bis zu 60 Sekunden. Danach kann ein erzwungener Stopp folgen. Stromausfall und
 SIGKILL erlauben keinen Python-Aufräumcode. Ein Prozess-Test mit gemockten Adaptern
-prüft den bisherigen Handler; echte Container-Signalzustellung ist noch auf der
-Green zu prüfen.
+prüft den bisherigen Handler. Regulärer App-Betrieb und Neustarts auf der Green
+wurden erprobt; das Verhalten bei Stromausfall ist damit nicht abgedeckt.
 
 Der vorherige Pi-Dienst und eine aktive App dürfen nicht gleichzeitig dieselbe
 Batterie regeln. Die Installation im Prüfmodus und die spätere Betriebsübergabe
@@ -251,13 +253,14 @@ der nächste Schritt. Sicherheitsupdates müssen dann bewusst eingepflegt werden
 
 - Python-Tests prüfen Optionsübersetzung, Fehlerbehandlung, Schutz vorhandener
   Konfiguration, Prüfmodus ohne Netzwerkzugriffe und den bisherigen SIGTERM-Pfad.
-- CI soll das Image auf amd64 bauen und den Prüfmodus mit temporären Mounts,
-  Dummy-Zugangsdaten und `--network none` ausführen.
+- CI ist für einen Image-Build auf amd64 und den Prüfmodus mit temporären Mounts,
+  Dummy-Zugangsdaten und `--network none` konfiguriert.
 - In der Entwicklungsumgebung ist Docker noch nicht installiert. Der Nutzer hat
   das Image auf der Green gebaut, installiert und die drei JSON-Zustände importiert.
-- Ein erster Betriebszyklus mit HA-Zugriff, MQTT-Status und Zielwertberechnung
-  wurde bestätigt. Dauerbetrieb, tatsächliche Stellwertübernahme und Stoppen
-  über den Supervisor sind noch separat zu prüfen.
+- Der laufende Betrieb mit HA-Zugriff und MQTT sowie Logging-Optionen und
+  CSV-Export wurden auf der Green erprobt und am 30.10.2026 als ausreichend
+  für die Übernahme in den Hauptbranch bestätigt. Stromausfall-Recovery bleibt
+  gesondert zu prüfen.
 
 Die manuelle Installation und der spätere Übergang stehen in [DOCS.md](../DOCS.md).
 Nach Installation und Prüfmodus von Version 0.1.0 wurden mit Version 0.1.1

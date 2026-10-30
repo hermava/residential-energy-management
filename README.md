@@ -51,12 +51,13 @@ integrated. For direct customer support go to settings -> Help & Feedback --> As
 
 ### Experimental Home Assistant OS app
 
-This branch also packages the existing manager as a locally built HA app for
+This repository also packages the existing manager as a locally built HA app for
 `aarch64` (including Green) and `amd64`. The default `run_manager: false` checks
 local configuration and exits without network requests or battery commands.
-Installation, check mode, the version 0.1.1 JSON-state import and an initial live
-cycle have been exercised on Green. HA access, MQTT status reception and target
-calculation worked; sustained control and live shutdown still need observation.
+Installation, check mode, JSON-state import, regular live operation, logging
+options and CSV export have been exercised on Green. The project author confirmed
+the app's operational testing on 2026-10-30. Power-loss recovery remains unverified;
+this installation does not establish compatibility with other battery hardware.
 Stop the existing service before importing state or enabling control in the app.
 
 See [App installation and operation](DOCS.md) and the German

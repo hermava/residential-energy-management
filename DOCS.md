@@ -2,10 +2,11 @@
 
 Experimental local Home Assistant OS app. The existing manager is packaged in a
 container; its control, recovery and forecast calculations are unchanged.
-Installation, check mode, version 0.1.1 state import and an initial live cycle have
-been exercised on Home Assistant Green. HA access, MQTT status reception and
-controller target calculation worked. This does not yet establish sustained
-control, command acknowledgement, live shutdown or power-loss recovery.
+Installation, check mode, JSON-state import, regular live operation, logging
+options and CSV export have been exercised on Home Assistant Green. The project
+author confirmed the app's operational testing on 2026-10-30. This covers the
+existing installation; power-loss recovery and other battery hardware remain
+unverified.
 
 The default `run_manager: false` validates local configuration and then exits.
 It makes no HA, MQTT or weather requests. A successful check does not establish
@@ -214,6 +215,14 @@ directory, increment `version` in `config.yaml`, reload the app store and instal
 the offered update. A plain restart uses the existing image; it does not rebuild
 Python source. Keep the slug and app location stable to retain the same app identity.
 
+## Known forecast limitation
+
+The current-hour battery input power forecast is selected only when Bright Sky
+data is fetched. After a clock-hour boundary, the published value can still refer
+to the previous hour until the next fetch. The delay depends on the fetch schedule
+and does not establish a fixed one-hour timezone offset. Selecting the current
+hour from already cached data on each forecast update is a separate pending fix.
+
 ## Development and validation
 
 ```bash
@@ -223,10 +232,12 @@ docker build --tag residential-energy-manager:dev .
 Building an image does not start the manager. Do not run the image with real
 credentials and `run_manager: true` while the Pi service is active.
 
-CI builds an amd64 image and runs the check mode with `--network none`, mock
-credentials and temporary mounts. Nothing is pushed to a registry. The user has
-also built and installed the app on aarch64 Green, imported state and observed
-an initial live cycle. Sustained operation and live shutdown remain to be checked.
+CI is configured to build an amd64 image and run the check mode with
+`--network none`, mock credentials and temporary mounts. Nothing is pushed to a
+registry. The app has also been built, installed and used on aarch64 Green,
+including state import, logging options and CSV export. The project author
+confirmed the operational testing on 2026-10-30; power-loss recovery remains
+unverified.
 The existing SIGTERM handler is covered by a subprocess test with mocked adapters;
 this does not replace testing signal delivery and shutdown on HA OS.
 
