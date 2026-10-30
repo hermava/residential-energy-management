@@ -12,11 +12,14 @@ forecasts do not issue battery commands or switch appliances.
 ```mermaid
 flowchart LR
   HA[Home Assistant sensors] --> LOAD[Load estimation]
-  BATTERY[MARSTEK via MQTT] --> LOAD
   LOAD --> CONTROL[Battery controller]
-  CONTROL --> BATTERY
-  BATTERY --> FORECAST[Advisory forecast]
-  FORECAST --> REPORT[Home Assistant monitoring]
+  BATTERY[MARSTEK via MQTT] -->|Battery status| CONTROL
+  CONTROL -->|Output target| BATTERY
+  BATTERY -->|PV input and SOC| FORECAST[Advisory forecast]
+  WEATHER[Bright Sky weather] --> FORECAST
+  LOAD --> REPORT[Home Assistant monitoring]
+  CONTROL --> REPORT
+  FORECAST --> REPORT
 ```
 
 ## Features
