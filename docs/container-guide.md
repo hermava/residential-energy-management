@@ -1,338 +1,113 @@
-# Container und Home-Assistant-App verstehen
+# Understanding containers and the Home Assistant app
 
-Diese Anleitung erklärt die erste App-Version dieses Projekts. Sie richtet sich
-an jemanden, der Python kennt und Container anhand des eigenen Projekts lernen
-möchte. Installation und Zustandsimport auf der Green wurden am 26.10.2026
-bestätigt. Seitdem wurden auch der laufende Betrieb, die Logging-Optionen und der
-CSV-Export erprobt; am 30.10.2026 hat der Projektbetreiber die App-Erprobung als
-ausreichend für die Übernahme in den Hauptbranch bestätigt. Stromausfall-Recovery
-und andere Batteriehardware bleiben gesondert zu prüfen.
+The app packages the existing Python manager for Home Assistant OS. It has been
+built and operated on Green; power-loss recovery and other battery hardware
+remain unverified. For installation and everyday use, follow the [app guide](../DOCS.md).
 
-## 1. Welche Aufgabe löst der Container?
+## Container basics
 
-Bisher stellen wir auf dem Pi Python, eine virtuelle Umgebung, Abhängigkeiten,
-Quellcode und den systemd-Dienst bereit. Das Image beschreibt stattdessen eine
-gemeinsame Laufzeitumgebung mit Python und unserem installierten Programm.
-HA übernimmt das Starten des daraus erzeugten Containers.
+A Python virtual environment isolates packages. A container also isolates the
+filesystem view, processes and networking, while sharing the host kernel.
+On Green, Docker and the HA Supervisor manage containers on HA OS.
 
-Eine virtuelle Python-Umgebung trennt hauptsächlich Python-Pakete. Ein Container
-trennt zusätzlich Dateisystemansicht, Prozesse und Netzwerk. Er verwendet den
-Kernel des Hosts; er enthält normalerweise keinen eigenen vollständigen Kernel
-wie eine virtuelle Maschine. Auf einer Home Assistant Green ist HA OS dieser Host.
-Docker und der HA Supervisor kümmern sich dort um die Containerverwaltung.
-
-Das vereinfacht Installation und Updates. Es beseitigt keine fachlichen Fehler
-im Python-Code und garantiert keine ununterbrochene Batterieregelung.
-
-## 2. Image, Container, Registry und Supervisor
-
-| Begriff | Bedeutung in unserem Projekt |
+| Term | Role |
 | --- | --- |
-| Dockerfile | Bauanleitung für die Laufzeitumgebung |
-| Image | Ergebnis des Builds: Dateisystemschichten mit Python, Bibliotheken und Code |
-| Container | Laufende oder gestoppte Instanz eines Images mit eigener beschreibbarer Schicht |
-| Registry | Optionaler Server zum Verteilen fertiger Images |
-| Supervisor | HA-Komponente, die unsere App baut beziehungsweise installiert, startet und stoppt |
-| Mount | Ein Verzeichnis, das dem Container von außen bereitgestellt wird |
+| Dockerfile | Instructions for building the application image |
+| Image | Python, dependencies and installed code |
+| Container | A running or stopped instance of an image |
+| Mount | External storage made available inside the container |
+| Supervisor | Builds or installs, starts and stops the HA app |
+| Registry | An optional service for publishing built images |
 
 ```mermaid
 flowchart LR
-    SOURCE[Quellcode und Dockerfile] --> BUILD[Image bauen]
-    BUILD --> IMAGE[Lokales Image]
-    IMAGE --> CONTAINER[Laufender Container]
+    SOURCE[Source and Dockerfile] --> BUILD[Build image]
+    BUILD --> IMAGE[Local image]
+    IMAGE --> CONTAINER[App container]
     SUPERVISOR[HA Supervisor] --> CONTAINER
-    OPTIONS[App-Optionen und Sensor-Konfiguration] --> CONTAINER
-    CONTAINER --> DATA[Dauerhafte Zustände und Logs]
+    CONTAINER --> DATA[Persistent mounts]
     CONTAINER --> HA[HA API]
-    CONTAINER --> MQTT[Bestehender MARSTEK-Broker]
+    CONTAINER --> MQTT[MARSTEK broker]
 ```
 
-Ein Image zu bauen startet noch kein Programm. Ein Containerstart führt dagegen
-den festgelegten Einstiegspunkt aus. Ein Push lädt ein Image in eine Registry.
-Diese drei Handlungen sind getrennt. Unsere erste Version baut lokal; es gibt
-keinen automatischen Registry-Push. Code, den wir in ein öffentliches Git-Repo
-pushen, ist weiterhin öffentlich; deine Laufzeitdaten gehören nicht hinein.
+Building creates an image; starting a container runs its entry point; pushing
+publishes an image to a registry. This project builds locally and does not
+publish images automatically.
 
-## 3. Unser Dockerfile Schritt für Schritt
+## How this image works
 
-```dockerfile
-FROM python:3.11-slim-bookworm
-```
+The [Dockerfile](../Dockerfile) uses `python:3.11-slim-bookworm` and installs the
+project with `pip install .` at build time. Only application files and the sensor
+template are copied. `.dockerignore` excludes local configuration and measurements.
 
-Wir beginnen mit dem offiziellen Python-Image für Python 3.11 auf einem schlanken
-Debian-Benutzersystem. Python 3.11 wird bereits in unserer CI getestet. Das
-Basisimage enthält unter anderem HTTPS-Zertifikate und Zeitzonendaten. Deshalb
-brauchen wir für die erste Version keine zusätzliche Linux-Paketinstallation.
-Ein spezielles HA-Basisimage ist nicht vorgeschrieben; seine zusätzlichen
-Werkzeuge benötigen wir für diesen einzelnen Python-Prozess nicht.
+The working directory is `/app`. Python writes console output immediately and
+avoids `.pyc` files. The entry point, `energy_manager.home_assistant_app`, reads
+HA options before starting the existing manager through `os.execv()`.
 
-Die Green verwendet ARM64, in HA `aarch64` genannt. Viele Entwicklungsrechner
-verwenden `amd64`. Das Python-Basisimage wird für beide Architekturen angeboten.
-Beim nativen Build auf der Green wird die ARM-Version verwendet. Ein lokal auf
-einem x86-Rechner gebautes Image lässt sich nicht ohne Weiteres auf ARM starten.
-Unsere CI ist für amd64 konfiguriert; der Nutzer hat zusätzlich auf der Green
-ein ARM64-Image gebaut und installiert.
+Green builds for `aarch64`; CI is configured for `amd64`. Source changes require
+rebuilding the image. Docker can cache unchanged layers, but dependency installation
+runs again when the preceding source-copy layer changes. Base-image tags and
+unpinned dependencies can change between builds.
 
-```dockerfile
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-WORKDIR /app
-```
+## Persistent data and configuration
 
-`ENV` setzt Standard-Umgebungsvariablen im Image. Python schreibt dadurch
-Konsolenmeldungen sofort in die HA-Logs und erzeugt keine unnötigen `.pyc`-Dateien.
-Diese Variablen enthalten keine Zugangsdaten. `WORKDIR` legt das Arbeitsverzeichnis
-fest: Relative Python-Pfade werden später von `/app` aus aufgelöst.
+| Container path | Contents |
+| --- | --- |
+| `/app` | Application code from the image |
+| `/config` | App-specific `sensors.yaml`, state-import files and CSV exports |
+| `/data` | Private options, operational JSON state and measurement logs |
 
-`COPY` übernimmt anschließend gezielt `pyproject.toml`, README, `src/`, den bisherigen
-Einstiegspunkt und die teilbare Sensorvorlage. Unsere lokale `.env` und Messreihen
-werden nicht kopiert.
+Links from `/app/config` and `/app/data` preserve the manager's relative paths.
+Mounts survive container replacement; uninstalling the app can remove data, so
+backups are still needed. The app's `/config` is separate from HA Core's config.
+Its `/data` is not directly accessible through Samba.
 
-```dockerfile
-RUN python -m pip install --no-cache-dir . \
-    && ln -s /data /app/data \
-    && ln -s /config /app/config
-```
+Repository-root `config.yaml` describes the app and its options. The installation's
+`sensors.yaml` defines sensors, battery parameters and forecast sources. The
+Supervisor writes option values to `/data/options.json`; the launcher maps them
+to the existing environment variables.
 
-`RUN` wird während des Builds ausgeführt. `pip install .` installiert das Projekt
-und seine in `pyproject.toml` beschriebenen Abhängigkeiten. Diese Installation
-passiert beim Bauen des Images, nicht bei jedem Containerstart.
+## Connections and process lifecycle
 
-Docker kann bereits gebaute Schichten wiederverwenden. Änderungen an kopierten
-Dateien können nachfolgende Schritte erneut auslösen. In dieser einfachen Version
-führt eine Quellcodeänderung deshalb auch wieder zur Paketinstallation. Das ist
-für den Einstieg überschaubar; spätere Optimierungen können Abhängigkeiten und
-Projektinstallation in getrennte Cache-Schichten aufteilen.
+The app connects outward to HA, MQTT and Bright Sky and exposes no inbound ports.
+HA supplies a Supervisor token for `http://supervisor/core`; a personal HA token
+is unnecessary. This access has administrator privileges. Credentials must stay
+out of images and logs, and password fields do not guarantee encrypted storage.
+For Mosquitto on the same HA instance, use `core-mosquitto`; `localhost` refers
+to the container itself.
 
-Die beiden `ln -s` erzeugen symbolische Links. Sie verweisen aus `/app` auf die
-von HA gemounteten Verzeichnisse. Warum das wichtig ist, erklärt der nächste Abschnitt.
+The default `run_manager: false` checks local files and options, then exits.
+A stopped app is expected after this check; it does not verify connectivity or
+sensor existence. Missing sensor configuration is created from the template once
+and must be adapted before operation.
 
-```dockerfile
-STOPSIGNAL SIGTERM
-ENTRYPOINT ["python", "-m", "energy_manager.home_assistant_app"]
-```
+`run_manager: true` enables battery control. Run only one manager against a battery.
+The Docker init process (`init: true`) forwards signals and reaps child processes.
+Normal shutdown sends SIGTERM to the manager's existing handler; HA allows up to
+60 seconds before forcing a stop. Power loss and SIGKILL prevent cleanup.
 
-`ENTRYPOINT` wird beim Containerstart ausgeführt. Die JSON-Schreibweise startet
-Python direkt. Der neue App-Starter liest die HA-Optionen und führt im Betriebsmodus
-anschließend den bisherigen Einstiegspunkt aus. `STOPSIGNAL` legt das normale
-Stoppsignal fest. Beides ist für eine kontrollierte Beendigung wichtig.
+## Builds, updates and operating procedures
 
-## 4. Warum Daten außerhalb des Images liegen
-
-Ein Image enthält die Programmversion. Ein Container kann zusätzlich Dateien
-schreiben; diese Änderungen sind aber an diesen Container gebunden. Ein bloßer
-Neustart erhält seine beschreibbare Schicht. Wird der Container beim Update
-ersetzt, müssen wichtige Daten in einem dauerhaften Mount liegen.
-
-| Sicht des bisherigen Python-Codes | Auflösung im Container | Dauerhafter Inhalt |
-| --- | --- | --- |
-| `config/sensors.yaml` | `/app/config/sensors.yaml` → `/config/sensors.yaml` | Deine Anlagenkonfiguration |
-| `data/battery_daily_energy.json` | `/app/data/battery_daily_energy.json` → `/data/battery_daily_energy.json` | Energiezähler |
-| `data/marstek_recovery_state.json` | `/app/data/marstek_recovery_state.json` → `/data/marstek_recovery_state.json` | Recovery-Zustand |
-| `data/logs/forecast/` | `/app/data/logs/forecast/` → `/data/logs/forecast/` | Wetter- und PV-Archive |
-
-So können unsere bisherigen relativen Pfade erhalten bleiben. Wir brauchen dafür
-keine Änderungen an der Recovery-Logik oder an den Energiezählern.
-
-HA stellt `/data` als privaten App-Speicher bereit. Unsere App-Beschreibung fordert
-zusätzlich ihr öffentlich zugängliches Konfigurationsverzeichnis als `/config` an.
-„Öffentlich“ bedeutet hier für dich über HA-Dateiwerkzeuge zugänglich, nicht im
-Internet veröffentlicht. Dieses Verzeichnis ist nicht die Konfiguration von HA Core.
-
-Mounts erhalten Daten über App-Updates hinweg. Sie ersetzen kein Backup und schützen
-nicht automatisch beim Deinstallieren. Optionen und Backups können Zugangsdaten
-enthalten. Für die spätere Migration müssen bestehende Zustände gezielt übernommen
-werden; allein der neue Container übernimmt keine Pi-Dateien.
-
-## 5. Zwei verschiedene Konfigurationsdateien
-
-Die neue **`config.yaml` im Repository-Hauptverzeichnis** beschreibt die HA-App:
-Name, Version, Architektur, Berechtigungen, Mounts und Formularfelder.
-
-Die vorhandene **`config/sensors.yaml`** bleibt die fachliche Anlagenkonfiguration:
-Sensor-IDs, Batterieparameter und Forecast-Quellen. Sie gehört deiner Installation.
-Das Image enthält ausschließlich die teilbare Beispielversion.
-
-Der Supervisor speichert die Formularwerte als `/data/options.json`. Unser
-App-Starter übersetzt diese Werte in die bereits vom Projekt verwendeten
-Umgebungsvariablen wie `MQTT_HOST` oder `MARSTEK_DEVICE_MAC`. Es gibt weiterhin
-denselben Python-Kern und dieselben Adapter.
-
-Für den HA-Zugriff setzt der Starter die Basisadresse `http://supervisor/core`.
-Unser vorhandener Adapter ergänzt `/api/...`. Der Supervisor stellt dafür den
-Token bereit; ein persönlicher HA-Token muss nicht kopiert werden. Dieser Zugriff
-hat Administratorrechte und der Token gehört weder ins Image noch ins Log.
-Das als Passwort markierte MQTT-Feld wird in der Oberfläche verborgen; das ist
-keine Garantie verschlüsselter Speicherung von Optionen und Backups.
-
-BrightSky-Koordinaten sind optional. Beide fehlen bedeutet keine Wetterprognose;
-eine einzelne Koordinate wird als Konfigurationsfehler abgelehnt. Null ist eine
-gültige Koordinate. Die App prüft Zahlenbereiche und Zeitzonen vor einem Start.
-
-## 6. Netzwerk: Warum wir keine Ports freigeben
-
-Das Programm verbindet sich als Client mit HA, dem bisherigen MQTT-Broker und
-BrightSky. Es bietet selbst keinen Webserver an. Dafür ist keine Portfreigabe
-auf der Green erforderlich. Eine Weboberfläche und Ingress sind somit noch kein
-Teil dieser Version.
-
-Jeder Container hat seine eigene Netzwerkansicht. `localhost` bezeichnet dort
-den eigenen Container. Für den Broker bleibt die bisher verwendete erreichbare
-Adresse maßgeblich. Nur wenn du tatsächlich die Mosquitto-App als Broker benutzt,
-ist etwa `core-mosquitto` der passende interne Name. Eine App-Verpackung wechselt
-nicht automatisch den Broker oder die Art der MARSTEK-Kommunikation.
-
-## 7. Kontrolliertes Starten und Stoppen
-
-Die Voreinstellung ist `run_manager: false`. Der Starter prüft dann nur lokale
-Dateien und Optionen und beendet sich. Das ist kein Verbindungscheck und prüft
-nicht, ob deine Sensor-IDs in HA existieren. Der Container bleibt danach nicht
-laufend; der Zustand „gestoppt“ ist bei erfolgreichem Prüfmodus erwartbar.
-
-Fehlt die Sensor-Konfiguration, wird einmalig die Vorlage angelegt. Der Starter
-beendet sich mit einem Hinweis, damit du sie zunächst anpassen kannst.
-Vorhandene Konfigurationen werden nicht überschrieben.
-
-Erst `run_manager: true` aktiviert den bisherigen Energie-Manager samt
-Batterieregelung. Der Starter verwendet `os.execv()`: Sein Prozess wird durch
-den Manager ersetzt. Es bleibt kein zusätzlicher Python-Starter davor hängen.
-Die Einstellung `init: true` lässt Docker einen kleinen Init-Prozess vorschalten,
-der Signale weitergibt und beendete Kindprozesse aufräumt. Unser Python-Basisimage
-hat kein eigenes S6-Init, daher ist diese Einstellung hier passend.
-
-Beim normalen Stopp bekommt der Manager SIGTERM. Sein bereits bestehender
-Signalhandler behandelt das wie eine kontrollierte Unterbrechung und kann bei
-aktiver Recovery den bisherigen Abbruchpfad aufrufen. HA wartet in dieser Version
-bis zu 60 Sekunden. Danach kann ein erzwungener Stopp folgen. Stromausfall und
-SIGKILL erlauben keinen Python-Aufräumcode. Ein Prozess-Test mit gemockten Adaptern
-prüft den bisherigen Handler. Regulärer App-Betrieb und Neustarts auf der Green
-wurden erprobt; das Verhalten bei Stromausfall ist damit nicht abgedeckt.
-
-Der vorherige Pi-Dienst und eine aktive App dürfen nicht gleichzeitig dieselbe
-Batterie regeln. Die Installation im Prüfmodus und die spätere Betriebsübergabe
-sind deshalb getrennte Schritte.
-
-## 8. Build-Kontext, Git und private Dateien
+To build locally without starting the manager:
 
 ```bash
 docker build --tag residential-energy-manager:dev .
 ```
 
-Der abschließende Punkt ist der Build-Kontext: das Verzeichnis, aus dem Docker
-Dateien übernehmen darf. `.gitignore` steuert ausschließlich Git. Für Docker
-gibt es die eigenständige `.dockerignore`.
+The final dot is the build context. `.gitignore` controls Git;
+[`.dockerignore`](../.dockerignore) controls files available to the build.
 
-Unsere `.dockerignore` beginnt mit einem Ausschluss aller Dateien und erlaubt
-anschließend nur die benötigten Quellen. Zusätzliche Regeln schließen Python-Caches
-und Umgebungsdateien aus. Die gezielten `COPY`-Anweisungen sind eine weitere
-Begrenzung dessen, was tatsächlich ins Image kommt. Der Build benötigt weder
-MQTT-Passwörter noch einen HA-Token. Solche Werte werden erst beim Start übergeben.
+For a local HA app, update the source in its existing app directory, increase
+`version` in `config.yaml`, check for updates and install the new version.
+**A restart alone does not install changed source code.**
 
-Der lokale Name `residential-energy-manager:dev` bezeichnet dein Image. Er ist
-keine automatische Veröffentlichung. Ein Registry-Push wäre eine eigene Handlung;
-auch unsere neue CI baut nur und veröffentlicht kein Image.
+Detailed procedures are in the app guide:
 
-## 9. Wie Änderungen beim laufenden Programm ankommen
+- [Installation and migration](../DOCS.md#local-installation)
+- [Import existing state](../DOCS.md#import-existing-state-version-011)
+- [Export measurement CSV files through Samba](../DOCS.md#export-measurement-csv-files-through-samba-version-030)
+- [Recording options and storage budgets](../DOCS.md#development-data-and-disk-limits-version-020)
+- [Development checks and validation limits](../DOCS.md#development-and-validation)
 
-Eine Änderung im Git-Branch ändert nur die Quelldateien. Ein bereits laufender
-Container benutzt weiter sein bisheriges Image. Für neuen Code ist ein neuer
-Build und ein Containerwechsel nötig. Ein bloßer Neustart baut nichts neu.
-
-Für eine lokale HA-App aktualisierst du die Quelldateien im lokalen App-Verzeichnis,
-erhöhst `version` in der App-`config.yaml`, lässt HA nach Updates suchen und
-installierst die neue Version. Die Daten-Mounts werden wieder eingebunden.
-
-Der Basisimage-Tag fixiert Python-Haupt-/Nebenversion und Debian-Variante, aber
-nicht jedes Byte des Images. Der Tag kann aktualisiert werden; auch unsere
-Python-Abhängigkeiten sind noch nicht vollständig festgeschrieben. Für exakt
-wiederholbare Releases wären ein geprüfter Image-Digest und feste Paketversionen
-der nächste Schritt. Sicherheitsupdates müssen dann bewusst eingepflegt werden.
-
-## 10. Was bereits geprüft wird und was noch fehlt
-
-- Python-Tests prüfen Optionsübersetzung, Fehlerbehandlung, Schutz vorhandener
-  Konfiguration, Prüfmodus ohne Netzwerkzugriffe und den bisherigen SIGTERM-Pfad.
-- CI ist für einen Image-Build auf amd64 und den Prüfmodus mit temporären Mounts,
-  Dummy-Zugangsdaten und `--network none` konfiguriert.
-- In der Entwicklungsumgebung ist Docker noch nicht installiert. Der Nutzer hat
-  das Image auf der Green gebaut, installiert und die drei JSON-Zustände importiert.
-- Der laufende Betrieb mit HA-Zugriff und MQTT sowie Logging-Optionen und
-  CSV-Export wurden auf der Green erprobt und am 30.10.2026 als ausreichend
-  für die Übernahme in den Hauptbranch bestätigt. Stromausfall-Recovery bleibt
-  gesondert zu prüfen.
-
-Die manuelle Installation und der spätere Übergang stehen in [DOCS.md](../DOCS.md).
-Nach Installation und Prüfmodus von Version 0.1.0 wurden mit Version 0.1.1
-der Zustandsimport und ein erster Betriebszyklus vom Nutzer erfolgreich ausgeführt.
-
-## Ergänzung: Offline-Zustandsimport in Version 0.1.1
-
-Die private `/data`-Ablage lässt sich über die normale Samba-Freigabe nicht direkt
-befüllen. Deshalb kann der App-Starter nun ausdrücklich angeforderte Zustände
-aus `/config/state-import/` übernehmen. Die Option `import_state` funktioniert
-ausschließlich bei ausgeschaltetem `run_manager`. Sie prüft die drei bekannten
-JSON-Formate, übernimmt die Bytes unverändert und beendet die App wieder.
-
-Vorhandene abweichende Zustände werden nicht überschrieben. Identische Dateien
-können erneut geprüft werden. Auch beim Kopieren gibt es keinen Netzwerk- oder
-Gerätezugriff. Ein noch offener Recovery-Vorgang wird gemeldet und nicht durch
-Änderung seiner Zeitstempel oder Sollwerte aufgelöst. Die eigentliche Recovery-
-und Batterie-Logik bleibt unverändert. Nach der Übernahme wird die Importoption
-wieder deaktiviert. Die Schrittfolge für SCP und Samba steht in DOCS.md.
-
-Die Ergänzung wurde vom Nutzer auf der Green installiert. Der Import aller drei
-Zustandsdateien war erfolgreich; ein offener Recovery-Vorgang wurde nicht gemeldet.
-Beim anschließenden Start scheiterte zunächst der Zugriff auf die LAN-IPv6-Adresse
-des Brokers. Mit dem internen Namen `core-mosquitto` funktionierte die Abfrage des
-auf derselben Green laufenden Brokers. Ein erster Zyklus lieferte reale Batterie-
-Messwerte und einen berechneten Sollwert. Dies belegt noch keine bestätigte
-Stellwertübernahme und keinen Langzeittest. Deployment und Aktivierung wurden
-vom Nutzer vorgenommen.
-
-## Ergänzung: Schlanke Aufzeichnung in Version 0.2.0
-
-Nachdem der Manager auf der Green stabil läuft, konzentriert sich die normale
-Datensammlung auf die Forecast-Entwicklung. Zwei App-Optionen trennen die Aufgaben:
-
-- `forecast_data_logging: true` sammelt die kompakte PV-Eingangsleistung und
-  archivierte Wettervorhersagen. Die Auflösung der Messungen bleibt erhalten.
-- `debug_logging: false` schaltet die ausführlichen Rohdaten- und Forecast-CSV
-  sowie die Konsolenwerte jedes Regelzyklus standardmäßig aus. Fehler und bereits
-  vorhandene Kontroll-/Recovery-Ereignismeldungen bleiben sichtbar.
-
-Der App-Starter übergibt diese Einstellungen als Umgebungsvariablen an den neuen
-Managerprozess. Erst dieser Prozess importiert die Parameter für den laufenden
-Betrieb. Die App muss nach einer Optionsänderung neu gestartet werden; Python
-liest die Werte nicht bei jedem Messpunkt erneut ein. Standalone bleibt der
-frühere Debug-Standard für bestehende Installationen erhalten.
-
-PV- und Wetter-CSV teilen sich standardmäßig 200 MiB. Diagnosen dürfen getrennt
-in jedem ihrer beiden Ordner 10 MiB belegen. Die App bereinigt nur eindeutig
-zugehörige CSV-Dateien, beginnend mit dem ältesten abgeschlossenen UTC-Tag.
-JSON-Zustände und heutige Dateien werden nicht dafür gelöscht. Bei vollem Budget
-pausiert die Aufzeichnung, während Berechnung und Regelung weiterlaufen.
-
-Dateigrößen werden zwischengespeichert und bei eigenen Schreibvorgängen mitgezählt.
-Ein erneutes Einlesen des Verzeichnisses erfolgt alle fünf Minuten beziehungsweise
-beim UTC-Tageswechsel. So müssen nicht bei jedem PV-Messpunkt sämtliche alten
-Dateien erneut abgefragt werden. Externe Dateiänderungen werden erst beim nächsten
-Einlesen berücksichtigt. Ist eine Kategorie ausgeschaltet, bleiben ihre bisherigen
-Dateien erhalten; die Bereinigung ist an weitere Aufzeichnungen gebunden.
-
-Diese Grenzen betreffen die verwalteten CSV-Dateien, nicht den gesamten Speicher
-der Green oder die vom Containerdienst verwalteten Konsolenlogs. Für Daten über
-die Aufbewahrungsgrenze hinaus ist eine externe Archivierung nötig; es gibt
-keinen automatischen Export. Die neue Aufbewahrung ist deshalb im Changelog
-als bewusste Update-Entscheidung gekennzeichnet. Kein laufendes Gerät wurde durch
-diese Implementierung aktualisiert oder neu gestartet.
-
-## Weiterführende Primärquellen
-
-- [Docker: Container ausführen](https://docs.docker.com/engine/containers/run/)
-- [Docker: Build-Kontext und dockerignore](https://docs.docker.com/build/concepts/context/)
-- [Dockerfile-Anweisungen](https://docs.docker.com/reference/dockerfile/)
-- [HA: lokale App erstellen](https://contributors.home-assistant.io/apps/first-app/)
-- [HA: App-Konfiguration](https://contributors.home-assistant.io/apps/reference/configuration/)
-- [HA: Optionen](https://contributors.home-assistant.io/apps/guides/options/)
-- [HA: API-Kommunikation](https://contributors.home-assistant.io/apps/guides/communication/)
+For background, see the [Dockerfile reference](https://docs.docker.com/reference/dockerfile/)
+and [HA app configuration](https://contributors.home-assistant.io/apps/reference/configuration/).

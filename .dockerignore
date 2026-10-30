@@ -4,6 +4,7 @@
 !.dockerignore
 !pyproject.toml
 !README.md
+!LICENSE
 !src/
 !src/**
 !scripts/

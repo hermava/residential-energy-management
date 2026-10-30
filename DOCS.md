@@ -20,7 +20,7 @@ This is a manual installation procedure, not an automatic deployment.
    installations expose this as `addons` or `/addons`.
 2. Copy this repository into one app directory, for example
    `local_apps/residential_energy_manager/`. `config.yaml`, `Dockerfile`,
-   `pyproject.toml`, `README.md`, `DOCS.md`, `CHANGELOG.md`, `.dockerignore`, `src/`,
+   `pyproject.toml`, `README.md`, `LICENSE`, `DOCS.md`, `CHANGELOG.md`, `.dockerignore`, `src/`,
    `scripts/run_energy_manager.py`, `config/sensors.example.yaml` and
    `translations/` belong there. Do not copy `.env`, `.git`, `.venv`, local
    `config/sensors.yaml` or `data/` into this source directory.
@@ -246,8 +246,8 @@ The tag can receive updates and project dependencies are not locked; builds are
 not guaranteed to be byte-identical. Pinning a reviewed base digest and dependency
 versions is a follow-up for reproducible releases.
 
-A German explanation of the container concepts and design choices is available in
-[Container und HA-App verstehen](docs/container-guide.md).
+An explanation of the container concepts and design choices is available in
+[Understanding containers and the Home Assistant app](docs/container-guide.md).
 
 Official references: [local apps](https://contributors.home-assistant.io/apps/first-app/),
 [app configuration](https://contributors.home-assistant.io/apps/reference/configuration/),

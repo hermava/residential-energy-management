@@ -161,6 +161,10 @@ synchronization with a standalone Raspberry Pi installation.
 
 - [Home Assistant app](DOCS.md): installation, state import, export and updates
 - [User guide](docs/user-guide.md): configuration, forecast rules, logs and services
-- [Forecast model](docs/forecast-model.md): calculation and validation details (German)
-- [Container guide](docs/container-guide.md): how the app packaging works (German)
+- [Forecast model](docs/forecast-model.md): calculation and validation details
+- [Container guide](docs/container-guide.md): how the app packaging works
 - [Changelog](CHANGELOG.md): app versions and behavior changes
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

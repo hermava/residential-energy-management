@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Copy only application files. Local configuration and history never enter the image.
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md LICENSE ./
 COPY src/ ./src/
 COPY scripts/run_energy_manager.py ./scripts/run_energy_manager.py
 COPY config/sensors.example.yaml ./defaults/sensors.example.yaml
