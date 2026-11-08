@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0
+
+- Add optional estimated grid export power and daily/lifetime energy sensors.
+  Integrate positive measured battery output minus estimated household load,
+  including cycles with invalid load contributions; report load quality separately.
+- Persist export counters across restarts, reset only the daily counter at Berlin
+  midnight, and exclude missing battery readings and gaps longer than 30 seconds.
+- Support the export state file in the offline app-state import and document an
+  HA dashboard example. Battery control and recovery behavior remain unchanged.
+- Existing installations must add the optional export outputs to their app
+  `sensors.yaml`; an update preserves the existing configuration. Export is an
+  estimate from MARSTEK DC output and household load; downstream inverter losses
+  are not modeled.
+
 ## 0.3.0
 
 - Add an offline `export_logs` option to copy measurement CSV files into the

@@ -8,9 +8,11 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 from energy_manager.daily_energy import read_daily_energy
+from energy_manager.export_energy import read_export_energy
 
 STATE_FILES = (
     "marstek_recovery_state.json", "battery_daily_energy.json", "brightsky_forecast_state.json",
+    "estimated_export_energy.json",
 )
 MAX_STATE_BYTES = 1024 * 1024
 
@@ -78,6 +80,8 @@ def _state_payload(path: Path) -> bytes:
             _number(data["output_wh"])
             if "complete" in data and type(data["complete"]) is not bool:
                 raise ValueError("Invalid daily completeness flag")
+        elif path.name == "estimated_export_energy.json":
+            read_export_energy(path, datetime.now(UTC))
         else:
             _validate_forecast(data)
     except (ValueError, KeyError, TypeError, AttributeError) as error:

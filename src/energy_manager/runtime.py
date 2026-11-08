@@ -11,6 +11,7 @@ from energy_manager.controller import calculate_battery_output_target
 from energy_manager.csv_logging import _append_marstek_log
 from energy_manager.daily_energy import update_daily_energy
 from energy_manager.estimation import estimate_load
+from energy_manager.export_energy import EXPORT_OUTPUTS, update_export_energy
 from energy_manager.forecast.forecast_data_collection import (
     record_completed_brightsky_comparison,
     update_brightsky_forecast_collection,
@@ -24,6 +25,7 @@ from energy_manager.ha_reporting import (
     _publish_battery_states,
     _publish_controller_target,
     _publish_daily_energy,
+    _publish_export_energy,
     _publish_load_estimate,
     _publish_oscillation_monitor,
     _publish_recovery_status,
@@ -130,6 +132,14 @@ def _run_cycle(
         last_command_w, command_sent, command_reason, control_inhibited,
     )
     _print_cycle_status(load_estimate, battery_state, target_power_w)
+    try:
+        if any(name in config.outputs for name in EXPORT_OUTPUTS):
+            export_energy = update_export_energy(
+                battery_state, load_estimate, forecast_state, config.battery.max_age_seconds,
+            )
+            _publish_export_energy(config, ha, export_energy, quality_issues)
+    except (OSError, ValueError, KeyError, TypeError, requests.RequestException) as exc:
+        print(f"Estimated export reporting failed: {exc}")
     try:
         if any(name in config.outputs for name in (
             "battery_input_energy_today", "battery_output_energy_today",

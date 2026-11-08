@@ -11,6 +11,7 @@ from energy_manager.exceptions import (
     InvalidMeasurementError,
     MeasurementUnavailableError,
 )
+from energy_manager.export_energy import ExportEnergy
 from energy_manager.forecast.forecast import DailyEnergyForecast
 from energy_manager.models import (
     PowerChannelType,
@@ -232,6 +233,45 @@ def _publish_daily_energy(config, ha: HomeAssistantAdapter, energy: DailyEnergy)
                 "complete": energy.complete,
                 "integration_method": "trapezoidal",
                 "period_start": midnight.isoformat(),
+            },
+        )
+
+
+def _publish_export_energy(
+    config, ha: HomeAssistantAdapter, energy: ExportEnergy, quality_issues: list,
+) -> None:
+    common = {"estimated": True, "timezone": str(LOCAL_TIMEZONE)}
+    output = config.outputs.get("estimated_export_power")
+    if output is not None:
+        ha.publish_state(
+            output.entity_id,
+            f"{energy.power_w:.1f}" if energy.power_w is not None else "unavailable",
+            attributes={
+                **common, "friendly_name": "Geschätzte Einspeiseleistung",
+                "unit_of_measurement": "W", "device_class": "power",
+                "state_class": "measurement", "load_contributions_valid": not quality_issues,
+                "quality_issues": quality_issues,
+            },
+        )
+    midnight = datetime.combine(energy.day, time.min, LOCAL_TIMEZONE)
+    periods = (
+        ("today", "heute", energy.today_wh, energy.today_complete,
+         energy.today_load_valid, midnight),
+        ("total", "gesamt", energy.total_wh, energy.total_complete,
+         energy.total_load_valid, energy.started_at),
+    )
+    for period, label, value, complete, load_valid, start in periods:
+        output = config.outputs.get(f"estimated_export_energy_{period}")
+        if output is None:
+            continue
+        ha.publish_state(
+            output.entity_id, f"{value / 1000:.6f}",
+            attributes={
+                **common, "friendly_name": f"Geschätzte Einspeisung {label}",
+                "unit_of_measurement": "kWh", "device_class": "energy",
+                "state_class": "total_increasing", "complete": complete,
+                "load_contributions_valid": load_valid, "period_start": start.isoformat(),
+                "integration_method": "trapezoidal",
             },
         )
 

@@ -17,6 +17,15 @@ constant_consumers:
     estimated_power_w: 50
 
 outputs:
+  estimated_export_power:
+    entity_id: sensor.residential_estimated_export_power
+
+  estimated_export_energy_today:
+    entity_id: sensor.residential_estimated_export_energy_today
+
+  estimated_export_energy_total:
+    entity_id: sensor.residential_estimated_export_energy_total
+
   forecast_status_today:
     entity_id: sensor.residential_energy_forecast_today
 

@@ -63,3 +63,4 @@ BRIGHTSKY_FORECAST_STATE_PATH = Path("data/brightsky_forecast_state.json")
 
 DAILY_ENERGY_STATE_PATH = Path("data/battery_daily_energy.json")
 DAILY_ENERGY_MAX_GAP_SECONDS = 30.0
+EXPORT_ENERGY_STATE_PATH = Path("data/estimated_export_energy.json")

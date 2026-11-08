@@ -101,6 +101,7 @@ then install version 0.1.1 through HA. Keep `run_manager: false`.
        marstek_recovery_state.json
        battery_daily_energy.json
        brightsky_forecast_state.json
+       estimated_export_energy.json
    ```
 
 4. Enable `import_state`, leave `run_manager` disabled, save and start the app.
@@ -113,7 +114,7 @@ then install version 0.1.1 through HA. Keep `run_manager: false`.
 6. Disable `import_state` again. A later live start requires `run_manager: true`
    and `import_state: false`.
 
-Only these three JSON filenames are supported. Missing files are not invented;
+Only these four JSON filenames are supported. Missing files are not invented;
 an empty import folder or additional files are rejected. `options.json` and
 credentials must never be placed in `state-import`. The original Pi files and
 the import copies remain untouched. The import does not include historical CSV
@@ -139,6 +140,55 @@ the existing relative Python paths without changing the control modules.
 The mounted data survives container replacement and app updates. Maintain backups;
 uninstalling the app can remove its data. Options and backups can contain secrets.
 See the recording limits below before updating a large existing archive.
+
+## Estimated export monitoring (version 0.4.0)
+
+This release adds estimated export power and daily/lifetime energy counters.
+The new monitoring has automated test coverage; live validation of these sensors
+on HA Green is pending. It uses MARSTEK output minus estimated household load;
+downstream inverter losses are not modeled, so it is an approximation rather than
+a measurement at the grid connection. Battery control and recovery are unchanged.
+
+To update an existing local installation:
+
+1. Stop the app. Set `run_manager: false`, `import_state: false` and
+   `export_logs: false`, then save the options.
+2. Copy the updated app source into its **existing** local app directory,
+   including `config.yaml` with version `0.4.0`. Keep its folder name and slug.
+   Retain the app's configuration, options and private data; do not uninstall it.
+3. Refresh/check for updates in the app store and install version `0.4.0`.
+   A plain restart does not rebuild the installed image.
+4. In the app's public `sensors.yaml`, merge the following entries into the
+   existing `outputs` mapping. The app does not replace an existing sensor
+   configuration or enable these outputs automatically during an update:
+
+   ```yaml
+   outputs:
+     estimated_export_power:
+       entity_id: sensor.residential_estimated_export_power
+     estimated_export_energy_today:
+       entity_id: sensor.residential_estimated_export_energy_today
+     estimated_export_energy_total:
+       entity_id: sensor.residential_estimated_export_energy_total
+   ```
+
+5. Start once with `run_manager: false` and check the Log tab. A successful
+   configuration check exits normally without HA, MQTT or weather requests.
+6. For the live test, restore `run_manager: true`, leave `import_state` and
+   `export_logs` false, save and start. Only this app may control the battery;
+   the previous Pi manager must remain stopped.
+7. Check the three entities in HA's Developer Tools → States. The power should
+   follow `max(0, reported_battery_output_w - estimated_total_load_w)`. The energy
+   counters start at zero when no export state exists and increase as export is
+   recorded. Invalid load contributions still count; inspect
+   `load_contributions_valid` separately from the energy counters' `complete`
+   time-coverage flag. Missing battery readings make current power unavailable.
+
+The counter state is private `/data/estimated_export_energy.json` and survives
+app updates and restarts. After a restart, known energy remains but unobserved
+time is not filled. Today's counter resets at Berlin midnight; the lifetime
+counter continues. See the [calculation and dashboard example](docs/user-guide.md#estimated-grid-export)
+for details and a card you can copy into your dashboard.
 
 ## Export measurement CSV files through Samba (version 0.3.0)
 

@@ -27,6 +27,7 @@ flowchart LR
 - Household load estimation with freshness and plausibility checks
 - Battery output control with SOC limits, command intervals and recovery
 - Home Assistant monitoring and persistent daily input/output energy counters
+- Estimated grid export power with persistent daily and lifetime energy counters
 - Bright Sky forecasts for the remaining day, tomorrow and the day after tomorrow
 - Configurable CSV recording, storage budgets and export through Samba
 - Offline forecast calibration and evaluation
@@ -100,6 +101,11 @@ Incomplete measurement coverage is flagged; downtime is not estimated or backfil
 See the [forecast rules and outputs](docs/user-guide.md#energy-forecast),
 [daily energy counters](docs/user-guide.md#daily-battery-energy), and the
 [known current-hour update delay](DOCS.md#known-forecast-limitation).
+
+Estimated export monitoring compares measured battery output with estimated
+household load. It reports current W and daily/lifetime kWh independently of
+battery control. See [estimated export and dashboard setup](docs/user-guide.md#estimated-grid-export)
+for configuration, data quality and limitations.
 
 ### Offline calibration data
 

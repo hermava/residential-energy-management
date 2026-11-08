@@ -269,13 +269,22 @@ def test_recovery_info_pending_until_confirmed():
 
 
 @pytest.mark.parametrize("daily_error", [None, OSError("state save failed")])
+@pytest.mark.parametrize("export_mode", ["disabled", "enabled", "save_error", "publish_error"])
 @pytest.mark.parametrize(
     "forecast_error", [None, OSError("log failed"), requests.ConnectionError()],
 )
-def test_runtime_wires_cycle_without_hardware(daily_error, forecast_error):
+def test_runtime_wires_cycle_without_hardware(daily_error, forecast_error, export_mode):
     cfg = config()
     cfg.solar_array = None
     cfg.outputs = {"battery_input_energy_today": Mock()}
+    if export_mode != "disabled":
+        cfg.outputs["estimated_export_energy_total"] = Mock()
+    export_update = Mock(
+        side_effect=OSError("export save") if export_mode == "save_error" else None,
+    )
+    export_publish = Mock(
+        side_effect=requests.ConnectionError() if export_mode == "publish_error" else None,
+    )
     daily_update = Mock(side_effect=daily_error)
     daily_publish = Mock()
     daily_forecast = Mock(side_effect=forecast_error)
@@ -315,6 +324,8 @@ def test_runtime_wires_cycle_without_hardware(daily_error, forecast_error):
         patch.object(runtime, "_publish_controller_target"),
         patch.object(runtime, "_publish_oscillation_monitor"),
         patch.object(runtime, "_publish_recovery_status"),
+        patch.object(runtime, "update_export_energy", export_update),
+        patch.object(runtime, "_publish_export_energy", export_publish),
         patch.object(runtime, "update_daily_energy", daily_update),
         patch.object(runtime, "_publish_daily_energy", daily_publish),
         patch.object(runtime, "update_daily_forecast", daily_forecast),
@@ -338,6 +349,15 @@ def test_runtime_wires_cycle_without_hardware(daily_error, forecast_error):
         forecast_update.assert_called_once_with(st.battery_state, forecast_state, 120)
         daily_update.assert_called_once_with(st.battery_state, forecast_state, 120)
         daily_forecast.assert_called_once_with(ha, cfg, st.battery_state, forecast_state)
+        if export_mode == "disabled":
+            export_update.assert_not_called()
+            export_publish.assert_not_called()
+        else:
+            export_update.assert_called_once_with(st.battery_state, estimate, forecast_state, 120)
+            if export_mode == "save_error":
+                export_publish.assert_not_called()
+            else:
+                export_publish.assert_called_once_with(cfg, ha, export_update.return_value, [])
         if daily_error is None:
             daily_publish.assert_called_once_with(cfg, ha, daily_update.return_value)
         else:

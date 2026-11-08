@@ -14,6 +14,12 @@ def state_contents():
         "battery_daily_energy.json": {
             "day": "2026-10-26", "input_wh": 123.5, "output_wh": 234.5, "complete": False,
         },
+        "estimated_export_energy.json": {
+            "day": "2026-10-26", "started_at": "2026-10-25T12:00:00+00:00",
+            "today_wh": 12.5, "total_wh": 234.5,
+            "today_complete": True, "total_complete": False,
+            "today_load_valid": False, "total_load_valid": False,
+        },
         "brightsky_forecast_state.json": {
             "daily_predictions": {"2026-10-27": {
                 "forecast_at": "2026-10-26T12:00:00+00:00", "estimated_input_wh": 1000,
@@ -71,6 +77,8 @@ def test_pending_recovery_is_reported_without_modifying_its_deadline(tmp_path):
     ("battery_daily_energy.json", '{"day": "2026-10-26", "input_wh": NaN, "output_wh": 1}'),
     ("battery_daily_energy.json", '{"day": "2026-10-26", "input_wh": true, "output_wh": 1}'),
     ("battery_daily_energy.json", '{}'),
+    ("estimated_export_energy.json", '{}'),
+    ("estimated_export_energy.json", '{"total_wh": NaN}'),
     ("brightsky_forecast_state.json", '{"daily_predictions": []}'),
     ("brightsky_forecast_state.json", '[]'),
     ("brightsky_forecast_state.json", 'not JSON: private-content'),
@@ -147,7 +155,7 @@ def test_partial_filesystem_failure_rolls_back_only_newly_created_files(tmp_path
         migration.import_app_state(source, destination)
     assert list(destination.iterdir()) == [untouched]
     assert untouched.read_text() == "keep"
-    assert len(list(source.iterdir())) == 3
+    assert len(list(source.iterdir())) == len(migration.STATE_FILES)
 
 
 def test_source_files_are_not_hardlinked_to_user_editable_import_folder(tmp_path):

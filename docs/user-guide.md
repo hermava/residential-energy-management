@@ -262,6 +262,74 @@ Input and output power are integrated with the trapezoidal rule. The counters re
 
 Missing, invalid or stale readings and intervals longer than 30 seconds are not integrated. The `complete` attribute marks incomplete days; a first start during the day or a restart leaves the known totals available but marks coverage incomplete. Downtime is not estimated or backfilled. These counters measure energy crossing the input/output interfaces, not the change in stored battery energy.
 
+## Estimated Grid Export
+
+Optional outputs report estimated export power and accumulated energy:
+
+| Output key | Example entity ID | Unit |
+| --- | --- | --- |
+| `estimated_export_power` | `sensor.residential_estimated_export_power` | W |
+| `estimated_export_energy_today` | `sensor.residential_estimated_export_energy_today` | kWh |
+| `estimated_export_energy_total` | `sensor.residential_estimated_export_energy_total` | kWh |
+
+For existing installations, add the desired entries under `outputs` in your
+`sensors.yaml`; new configurations include them in the example template:
+
+```yaml
+outputs:
+  estimated_export_power:
+    entity_id: sensor.residential_estimated_export_power
+  estimated_export_energy_today:
+    entity_id: sensor.residential_estimated_export_energy_today
+  estimated_export_energy_total:
+    entity_id: sensor.residential_estimated_export_energy_total
+```
+
+Each cycle calculates `max(0, measured_battery_output_w - estimated_total_load_w)`.
+It uses actual output reported by MARSTEK, not the requested or device target.
+Battery/PV input and the 130 W future-consumption assumption are not added.
+This assumes MARSTEK output is the only AC generation supplying the household.
+Additional AC generation requires a broader balance. These values are estimates
+based on household load, not measurements at the grid connection.
+
+Both energy counters integrate the nonnegative export samples using the
+trapezoidal rule: average the previous and current power and multiply by elapsed
+hours. Grid import never subtracts from export. Sampling cannot capture every
+short transient. The daily counter resets at midnight in `Europe/Berlin`, with
+23/25-hour daylight-saving days handled using elapsed UTC time. The total counter
+never resets at midnight and starts at the first recording; there is no historical
+backfill. A midnight-spanning interval is split for the daily counter and counted
+in full for the total counter.
+
+State is saved each cycle to `data/estimated_export_energy.json` (private `/data`
+in the HA app) using atomic replacement. Both totals and the recording start
+survive process restarts. Keep this file when updating or migrating; the offline
+app-state importer supports it. An invalid state file produces a reporting error
+rather than silently resetting the total. JSON persistence remains active when
+optional CSV logging is disabled.
+
+**Invalid load contributions do not stop integration.** The existing load estimate
+is used as-is, including its zero contributions for unavailable/stale/implausible
+inputs. Missing consumers can therefore overestimate export. All three sensors
+have `estimated: true`. The power sensor includes current `quality_issues` and
+`load_contributions_valid`; each energy counter's `load_contributions_valid` stays
+false once an invalid contribution has occurred in that period. The daily quality
+flag resets for a new day, accounting for both samples of the midnight interval.
+The lifetime quality flag remains false once affected. Valid contributions still
+include estimated and constant consumers, so this flag is not an accuracy guarantee.
+
+Time coverage is separate: `complete` on each energy sensor describes whether
+the period has gaps, independently of load quality. A first start during the day
+marks today's coverage incomplete; lifetime coverage begins at `period_start`.
+Missing, non-finite, negative, stale or future-dated battery output makes current
+power `unavailable` and pauses integration. Intervals longer than 30 seconds,
+restarts and clock rollback also break coverage; no missing time is filled.
+Known energy remains available. A later fully observed day can be complete again;
+the lifetime coverage flag retains earlier gaps. Monitoring does not change
+battery targets, command intervals, recovery or low-SOC behavior.
+
+
+
 ## Logs
 
 For the HA app's logging switches, storage budgets and CSV export procedure, see
